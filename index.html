@@ -12576,18 +12576,137 @@
     .v7-sidebar.collapsed {
       margin-left: -250px;
     }
+    .v7-sidebar-close-btn {
+      display: none;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      border-radius: 6px;
+      width: 32px;
+      height: 32px;
+      font-size: 1.1rem;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+    .v7-sidebar-close-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: #ef4444;
+      color: #fff;
+    }
+    .v7-sidebar-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px);
+      z-index: 999;
+      transition: opacity 0.3s ease;
+    }
     @media (max-width: 900px) {
       .v7-sidebar {
         position: fixed;
         left: 0;
         top: 0;
         bottom: 0;
-        margin-left: -250px;
-        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+        width: 270px;
+        max-width: 82vw;
+        margin-left: -290px;
+        box-shadow: 10px 0 30px rgba(0, 0, 0, 0.85);
+        z-index: 1000;
+        transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
       .v7-sidebar.mobile-open {
         margin-left: 0;
       }
+      .v7-sidebar-close-btn {
+        display: flex;
+      }
+      .v7-sidebar-backdrop.active {
+        display: block;
+      }
+    }
+
+    /* PWA Guide Modal Styles */
+    .pwa-guide-modal {
+      max-width: 500px;
+      width: 92%;
+      background: #0f172a;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(245, 158, 11, 0.15);
+      border-radius: var(--radius-md);
+    }
+    .pwa-tabs-bar {
+      display: flex;
+      gap: 0.5rem;
+      background: #1e293b;
+      padding: 0.3rem;
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+    }
+    .pwa-tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border-radius: var(--radius-xs);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      transition: all 0.2s;
+    }
+    .pwa-tab-btn.active {
+      background: #0f172a;
+      color: #f59e0b;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .pwa-step-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 0.85rem;
+      margin-bottom: 0.65rem;
+    }
+    .pwa-step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ef4444, #f59e0b);
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .pwa-step-info {
+      flex: 1;
+    }
+    .pwa-step-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.35;
+    }
+    .pwa-step-desc {
+      font-size: 0.74rem;
+      color: #94a3b8;
+      line-height: 1.4;
+      margin-top: 0.2rem;
     }
 
     .v7-sidebar-brand {
@@ -13911,14 +14030,15 @@
        ======================================================== -->
   <aside class="v7-sidebar" id="v7Sidebar">
     <!-- Brand: CONTENT SỔ ĐỎ -->
-    <div class="v7-sidebar-brand" onclick="switchSubsystem('dashboard')" title="CONTENT SỔ ĐỎ — Về Kịch Bản Video Ngắn">
-      <div class="v7-brand-logo">
+    <div class="v7-sidebar-brand">
+      <div class="v7-brand-logo" onclick="switchSubsystem('dashboard'); closeV7SidebarMobile();" title="CONTENT SỔ ĐỎ — Về Tổng Quan">
         <span class="v7-fire-icon">🔥</span>
         <div style="display: flex; flex-direction: column; text-align: left;">
           <span class="v7-brand-text" style="color: #f59e0b; font-weight: 900; letter-spacing: 0.04em; font-size: 0.98rem;">CONTENT SỔ ĐỎ</span>
           <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 600; letter-spacing: 0.02em;">Studio Video & Bài Viết BĐS</span>
         </div>
       </div>
+      <button type="button" class="v7-sidebar-close-btn" id="btnSidebarCloseMobile" onclick="closeV7SidebarMobile()" title="Đóng Menu">✕</button>
     </div>
 
     <!-- Navigation Menu -->
@@ -14059,6 +14179,8 @@
       </div>
     </nav>
   </aside>
+  <!-- Backdrop for Mobile Sidebar -->
+  <div class="v7-sidebar-backdrop" id="v7SidebarBackdrop" onclick="closeV7SidebarMobile()"></div>
 
 
     <!-- RIGHT MAIN WRAPPER -->
@@ -21040,6 +21162,122 @@ Tiện em đang chuẩn bị tuyến đường đi khảo sát khu này, anh/ch�
       <div class="pwa-banner-actions">
         <button type="button" class="btn-pwa-install" onclick="promptPwaInstall()">Cài Đặt</button>
         <button type="button" class="btn-pwa-dismiss" onclick="dismissPwaBanner()" title="Đóng">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: HƯỚNG DẪN CÀI ĐẶT APP LÊN MÀN HÌNH CHÍNH (PWA) -->
+  <div class="modal-overlay" id="pwaInstallGuideModal" style="display: none;">
+    <div class="modal-container pwa-guide-modal">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.6rem;">
+          <span style="font-size: 1.5rem;">📲</span>
+          <div>
+            <div style="font-size: 1.05rem; font-weight: 800; color: #fff;">Cài Đặt App Content Sổ Đỏ</div>
+            <div style="font-size: 0.76rem; color: #94a3b8;">Thêm vào Màn hình chính • Mở toàn màn hình • Dùng khi mất mạng</div>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal" onclick="closePwaInstallGuideModal()">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.25rem;">
+        <!-- PWA Guide Tabs -->
+        <div class="pwa-tabs-bar">
+          <button type="button" class="pwa-tab-btn active" id="pwaTabBtnIos" onclick="switchPwaGuideTab('ios')">
+            <span>🍏</span> iPhone (Safari)
+          </button>
+          <button type="button" class="pwa-tab-btn" id="pwaTabBtnAndroid" onclick="switchPwaGuideTab('android')">
+            <span>🤖</span> Android (Chrome)
+          </button>
+          <button type="button" class="pwa-tab-btn" id="pwaTabBtnPc" onclick="switchPwaGuideTab('pc')">
+            <span>💻</span> Máy Tính (PC)
+          </button>
+        </div>
+
+        <!-- Tab 1: iOS Safari -->
+        <div class="pwa-guide-panel" id="pwaPanelIos">
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Mở web bằng trình duyệt Safari</div>
+              <div class="pwa-step-desc">Đảm bảo bạn đang mở trên Safari (không mở trong khung chat Zalo/Facebook).</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm nút "Chia sẻ" (Biểu tượng mũi tên ⬆️)</div>
+              <div class="pwa-step-desc">Nằm ở thanh công cụ dưới cùng màn hình Safari.</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Chọn "Thêm vào MH chính" (Add to Home Screen)</div>
+              <div class="pwa-step-desc">Cuộn xuống danh sách các tác vụ và bấm chọn dòng này.</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">4</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm nút "Thêm" (Add) ở góc trên bên phải</div>
+              <div class="pwa-step-desc">Xong! Biểu tượng App Content Sổ Đỏ sẽ xuất hiện ngay trên màn hình chính của bạn.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Android Chrome -->
+        <div class="pwa-guide-panel" id="pwaPanelAndroid" style="display: none;">
+          <div id="pwaDirectInstallBox" style="margin-bottom: 0.85rem; display: none;">
+            <button type="button" class="btn-primary" style="width: 100%; padding: 0.75rem; font-weight: 800; font-size: 0.95rem; justify-content: center;" onclick="triggerDirectPwaInstall()">
+              <span>📲</span> CÀI ĐẶT NGAY BÂY GIỜ
+            </button>
+            <div style="text-align: center; font-size: 0.74rem; color: #94a3b8; margin-top: 0.35rem;">Bấm nút trên để cài app tự động vào điện thoại</div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm vào dấu 3 chấm (⋮) ở góc trên Chrome</div>
+              <div class="pwa-step-desc">Nằm ở góc trên cùng bên phải thanh địa chỉ.</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Chọn "Cài đặt ứng dụng" (hoặc "Thêm vào Màn hình chính")</div>
+              <div class="pwa-step-desc">Trình duyệt sẽ hiển thị cửa sổ xác nhận cài đặt.</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm "Cài đặt" để hoàn tất</div>
+              <div class="pwa-step-desc">Ứng dụng sẽ nằm trên màn hình chính như app tải từ CH Play!</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: PC / Laptop -->
+        <div class="pwa-guide-panel" id="pwaPanelPc" style="display: none;">
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm biểu tượng Cài đặt trên thanh địa chỉ URL</div>
+              <div class="pwa-step-desc">Trên Google Chrome / Edge máy tính, nhìn vào thanh địa chỉ bên phải sẽ có biểu tượng màn hình/mũi tên tải app.</div>
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-info">
+              <div class="pwa-step-title">Bấm "Cài đặt" (Install)</div>
+              <div class="pwa-step-desc">App sẽ mở ra cửa sổ độc lập riêng biệt cực kỳ nhanh chóng.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: flex-end; padding: 0.85rem 1.25rem;">
+        <button type="button" class="btn-secondary" onclick="closePwaInstallGuideModal()">Đã Hiểu</button>
       </div>
     </div>
   </div>

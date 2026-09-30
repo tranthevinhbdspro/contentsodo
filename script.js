@@ -7161,6 +7161,11 @@ function switchSubsystem(subsystemKey) {
   if (!subsystemKey) subsystemKey = 'dashboard';
   AppState.currentSubsystem = subsystemKey;
 
+  // Auto close mobile sidebar when navigating on mobile
+  if (typeof closeV7SidebarMobile === 'function') {
+    closeV7SidebarMobile();
+  }
+
   const dashWorkspace = document.getElementById('subsystemDashboardWorkspace');
   const legacyContainer = document.getElementById('v7LegacyWorkspacesContainer');
   const breadcrumbEl = document.getElementById('v7BreadcrumbText');
@@ -23427,11 +23432,26 @@ function injectFengShuiIntoCopywriting() {
 // ==========================================
 // 15.8. AUTO PRO CONTENT BĐS v7.0 CONTROLLERS
 // ==========================================
+function closeV7SidebarMobile() {
+  const sidebar = document.getElementById('v7Sidebar');
+  const backdrop = document.getElementById('v7SidebarBackdrop');
+  if (sidebar) sidebar.classList.remove('mobile-open');
+  if (backdrop) backdrop.classList.remove('active');
+}
+
 function toggleV7Sidebar() {
   const sidebar = document.getElementById('v7Sidebar');
+  const backdrop = document.getElementById('v7SidebarBackdrop');
   if (!sidebar) return;
   if (window.innerWidth <= 900) {
-    sidebar.classList.toggle('mobile-open');
+    const isOpen = sidebar.classList.contains('mobile-open');
+    if (isOpen) {
+      sidebar.classList.remove('mobile-open');
+      if (backdrop) backdrop.classList.remove('active');
+    } else {
+      sidebar.classList.add('mobile-open');
+      if (backdrop) backdrop.classList.add('active');
+    }
   } else {
     sidebar.classList.toggle('collapsed');
   }
@@ -24539,6 +24559,59 @@ function dismissPwaBanner() {
   }
 }
 
+function openPwaInstallGuideModal() {
+  const modal = document.getElementById('pwaInstallGuideModal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  const isIOS = (typeof navigator !== 'undefined') && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+  if (isIOS) {
+    switchPwaGuideTab('ios');
+  } else {
+    switchPwaGuideTab('android');
+  }
+
+  const directBox = document.getElementById('pwaDirectInstallBox');
+  if (directBox) {
+    directBox.style.display = deferredPwaPrompt ? 'block' : 'none';
+  }
+}
+
+function closePwaInstallGuideModal() {
+  const modal = document.getElementById('pwaInstallGuideModal');
+  if (modal) modal.style.display = 'none';
+}
+
+function switchPwaGuideTab(tabKey) {
+  ['ios', 'android', 'pc'].forEach(k => {
+    const btn = document.getElementById('pwaTabBtn' + k.charAt(0).toUpperCase() + k.slice(1));
+    const panel = document.getElementById('pwaPanel' + k.charAt(0).toUpperCase() + k.slice(1));
+    if (btn) {
+      if (k === tabKey) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+    if (panel) {
+      panel.style.display = (k === tabKey) ? 'block' : 'none';
+    }
+  });
+}
+
+function triggerDirectPwaInstall() {
+  if (deferredPwaPrompt) {
+    deferredPwaPrompt.prompt();
+    deferredPwaPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === 'accepted') {
+        hidePwaBanner();
+        closePwaInstallGuideModal();
+        if (typeof showToast === 'function') {
+          showToast('🎉 Đang tiến hành cài đặt ứng dụng!', '📲');
+        }
+      }
+      deferredPwaPrompt = null;
+    });
+  }
+}
+
 function promptPwaInstall() {
   if (isPwaStandaloneMode()) {
     if (typeof showToast === 'function') {
@@ -24553,25 +24626,18 @@ function promptPwaInstall() {
       if (choiceResult.outcome === 'accepted') {
         console.log('[PWA] Người dùng đã đồng ý cài đặt');
         hidePwaBanner();
+        closePwaInstallGuideModal();
+        if (typeof showToast === 'function') {
+          showToast('🎉 Đang tiến hành cài đặt ứng dụng!', '📲');
+        }
       } else {
         console.log('[PWA] Người dùng đã từ chối cài đặt');
       }
       deferredPwaPrompt = null;
     });
   } else {
-    // Trường hợp trên iOS Safari (không hỗ trợ beforeinstallprompt)
-    const isIOS = (typeof navigator !== 'undefined') && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
-    if (isIOS) {
-      if (typeof showToast === 'function') {
-        showToast('📱 Trên iPhone: Bấm nút Chia sẻ (Share ⬆️) ➔ Chọn "Thêm vào MH chính" để cài App!', '📲');
-      } else {
-        alert('Hướng dẫn cài đặt trên iPhone:\n\n1. Bấm vào nút Chia sẻ (biểu tượng mũi tên hướng lên ⬆️) ở thanh dưới cùng Safari.\n2. Cuộn xuống và chọn "Thêm vào MH chính" (Add to Home Screen).\n3. Bấm "Thêm" là xong!');
-      }
-    } else {
-      if (typeof showToast === 'function') {
-        showToast('💡 Bấm vào dấu 3 chấm góc trên trình duyệt ➔ Chọn "Cài đặt ứng dụng"!', '📲');
-      }
-    }
+    // Mở Modal Hướng dẫn trực quan chi tiết cho từng thiết bị
+    openPwaInstallGuideModal();
   }
 }
 
@@ -25080,6 +25146,11 @@ openRecruitSection,
     dismissPwaBanner,
     checkAndShowPwaBanner,
     hidePwaBanner,
-    isPwaStandaloneMode
+    isPwaStandaloneMode,
+    closeV7SidebarMobile,
+    openPwaInstallGuideModal,
+    closePwaInstallGuideModal,
+    switchPwaGuideTab,
+    triggerDirectPwaInstall
   };
 }
