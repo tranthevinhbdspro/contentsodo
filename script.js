@@ -1073,10 +1073,10 @@ function parseRealEstatePrice(text) {
   // B. Shorthand: "7t5", "7ty5", "7t500", "7ty500", "12t8"
   const shortMatch = text.match(/(?:(?:giá\s*(?:bán|chào|chốt)?|bán|chào)\s*[:\s~]?\s*)?(\d+)\s*(?:t|ty)\s*(\d+)\b/iu);
   // C. Decimal: "7.5 tỷ", "7,5 tỷ", "7.5 tỉ", "25 tỷ", "giá bán : 7.5 tỷ"
-  const decimalMatch = text.match(/(?:(?:giá\s*(?:bán|chào|chốt)?|bán|chào)\s*[:\s~]?\s*)(\d+(?:[.,]\d+)?)\s*(?:tỷ|tỉ|ty|t)\b/iu) || 
-                       text.match(/(\d+(?:[.,]\d+)?)\s*(?:tỷ|tỉ)\b/iu);
+  const decimalMatch = text.match(/(?:(?:giá\s*(?:bán|chào|chốt)?|bán|chào)\s*[:\s~]?\s*)(\d+(?:[.,]\d+)?)\s*(?:tỷ|tỉ|ty|t)(?:$|[^\p{L}\p{N}])/iu) || 
+                       text.match(/(\d+(?:[.,]\d+)?)\s*(?:tỷ|tỉ)(?:$|[^\p{L}\p{N}])/iu);
   // D. Millions under 1 billion: "850 triệu", "850tr", "950 triệu" (loại trừ /tháng là tiền thuê)
-  const millionMatch = text.match(/(?:(?:giá\s*(?:bán|chào|chốt)?|bán|chào)\s*[:\s~]?\s*)?(\d+(?:[.,]\d+)?)\s*(?:triệu|tr|trieu)\b(?!\s*[\/|\\]\s*tháng)/iu);
+  const millionMatch = text.match(/(?:(?:giá\s*(?:bán|chào|chốt)?|bán|chào)\s*[:\s~]?\s*)?(\d+(?:[.,]\d+)?)\s*(?:triệu|tr|trieu)(?:$|[^\p{L}\p{N}])(?!\s*[\/|\\]\s*tháng)/iu);
 
   if (compoundMatch) {
     const mainTy = parseFloat(compoundMatch[1].replace(',', '.'));
@@ -3571,6 +3571,32 @@ function clearManualForm() {
     'manualFloors', 'manualFloorDesc', 'manualRooms', 'manualBathrooms', 'manualCommercial',
     'manualDistanceToStreet', 'manualRent', 'manualExploitStatus', 'manualPotential', 'manualPrice'
   ];
+  const nhIds = [
+    'nhNew100', 'nhFullInterior', 'nhBasicInterior', 'nhGiftInterior',
+    'nhElevator', 'nhElevatorShaft', 'nhGarageInside', 'nhParkingYard',
+    'nhMezzanineVoid', 'nhMasterCloset', 'nhBathtub', 'nhSauna', 'nhSkyGarden', 'nhWorshipRoom', 'nhSkylight',
+    'nhSmartLock', 'nhSmartHome', 'nhSecurityCam', 'nhCentralAC', 'nhSolarWater', 'nhIndependentWall', 'nhDesignDocs', 'nhWarranty'
+  ];
+
+  const prevValues = {};
+  let hasAnyValue = false;
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value) {
+      prevValues[id] = el.value;
+      hasAnyValue = true;
+    }
+  });
+
+  const prevNh = {};
+  nhIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.checked) {
+      prevNh[id] = true;
+      hasAnyValue = true;
+    }
+  });
+
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -3586,7 +3612,38 @@ function clearManualForm() {
 
   clearNewHouseToggles(true);
 
-  showToast('🧹 Đã xóa trắng form nhập tay!', '🧹');
+  if (hasAnyValue && typeof showToast === 'function') {
+    showToast('🧹 Đã xóa trắng form nhập tay!', '🧹', {
+      actionText: '↩️ Hoàn tác',
+      duration: 7000,
+      onAction: () => {
+        ids.forEach(id => {
+          const el = document.getElementById(id);
+          if (el && prevValues[id] !== undefined) {
+            el.value = prevValues[id];
+          }
+        });
+        nhIds.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) {
+            el.checked = Boolean(prevNh[id]);
+            const lbl = (el.closest ? el.closest('.nh-chip-label') : null) || document.getElementById('lbl_' + id);
+            if (lbl) lbl.classList.toggle('active', Boolean(prevNh[id]));
+          }
+        });
+        const elevatorWrap = document.getElementById('nhElevatorSubWrap');
+        if (elevatorWrap) {
+          elevatorWrap.style.display = prevNh['nhElevator'] ? 'block' : 'none';
+        }
+        if (typeof syncManualToRaw === 'function') {
+          syncManualToRaw();
+        }
+        showToast('↩️ Đã khôi phục dữ liệu form nhập tay!', '✅');
+      }
+    });
+  } else if (typeof showToast === 'function') {
+    showToast('🧹 Đã xóa trắng form nhập tay!', '🧹');
+  }
 }
 
 // ==========================================
@@ -3742,11 +3799,18 @@ function handleAnalyzeAndGenerate() {
     }
 
     renderEntireUI();
+    if (typeof resetScriptUndoStack === 'function') {
+      resetScriptUndoStack();
+    }
 
     document.getElementById('quickActionBar').classList.add('visible');
     document.getElementById('resultsContainer').classList.add('visible');
     document.getElementById('quickActionBar').scrollIntoView({ behavior: 'smooth' });
     showToast('🎬 Đã phân tích xong và tạo kịch bản video!', '✅');
+
+    if (typeof markOnboardingQuestDone === 'function') {
+      markOnboardingQuestDone(2);
+    }
 
   } catch (err) {
     console.error(err);
@@ -4190,8 +4254,171 @@ function formatVoiceoverHtml(text) {
 // 13. INTERACTIVE CONTROLS (Section 21 - 24)
 // ==========================================
 
+// 13B. TIER 2: SCRIPT & HOOK UNDO/REDO ENGINE (In-Memory Stack)
+let scriptUndoStack = [];
+let scriptRedoStack = [];
+const SCRIPT_UNDO_STACK_MAX = 10;
+
+function resetScriptUndoStack() {
+  scriptUndoStack.length = 0;
+  scriptRedoStack.length = 0;
+  updateUndoRedoButtonsUI();
+}
+
+function captureCurrentScriptSnapshot(desc = '') {
+  if (!AppState.currentPropertyData) return null;
+  const hookEl = typeof document !== 'undefined' ? document.getElementById('displayHookContent') : null;
+  const tbody = typeof document !== 'undefined' ? document.getElementById('scriptTableBody') : null;
+  const titleEl = typeof document !== 'undefined' ? document.getElementById('displayVideoTitle') : null;
+  const bStyle = typeof document !== 'undefined' ? document.getElementById('displayBadgeStyle') : null;
+  const bAngle = typeof document !== 'undefined' ? document.getElementById('displayBadgeAngle') : null;
+  const bDur = typeof document !== 'undefined' ? document.getElementById('displayBadgeDuration') : null;
+
+  return {
+    style: AppState.currentStyle,
+    sellingAngleKey: AppState.currentSellingAngle ? AppState.currentSellingAngle.key : null,
+    duration: AppState.currentDuration,
+    pace: AppState.currentPace,
+    hookText: hookEl ? hookEl.textContent : '',
+    tableHtml: tbody ? tbody.innerHTML : '',
+    videoTitle: titleEl ? titleEl.textContent : '',
+    badgeStyle: bStyle ? bStyle.innerHTML : '',
+    badgeAngle: bAngle ? bAngle.innerHTML : '',
+    badgeDuration: bDur ? bDur.innerHTML : '',
+    desc: desc || 'Kịch bản video',
+    timestamp: Date.now()
+  };
+}
+
+function pushScriptSnapshot(desc = '') {
+  const snap = captureCurrentScriptSnapshot(desc);
+  if (!snap) return;
+  scriptUndoStack.push(snap);
+  if (scriptUndoStack.length > SCRIPT_UNDO_STACK_MAX) {
+    scriptUndoStack.shift();
+  }
+  scriptRedoStack.length = 0;
+  updateUndoRedoButtonsUI();
+}
+
+function undoScriptState() {
+  if (scriptUndoStack.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast('ℹ️ Không có thao tác kịch bản trước đó để hoàn tác.', 'ℹ️');
+    }
+    return;
+  }
+  const currentSnap = captureCurrentScriptSnapshot('Trạng thái hiện tại');
+  if (currentSnap) {
+    scriptRedoStack.push(currentSnap);
+    if (scriptRedoStack.length > SCRIPT_UNDO_STACK_MAX) {
+      scriptRedoStack.shift();
+    }
+  }
+  const prevSnap = scriptUndoStack.pop();
+  applyScriptSnapshot(prevSnap);
+  updateUndoRedoButtonsUI();
+  if (typeof showToast === 'function') {
+    showToast(`↩️ Đã hoàn tác: ${prevSnap.desc || 'kịch bản'}`, '↩️');
+  }
+}
+
+function redoScriptState() {
+  if (scriptRedoStack.length === 0) {
+    if (typeof showToast === 'function') {
+      showToast('ℹ️ Không có thao tác kế tiếp để làm lại.', 'ℹ️');
+    }
+    return;
+  }
+  const currentSnap = captureCurrentScriptSnapshot('Trạng thái trước');
+  if (currentSnap) {
+    scriptUndoStack.push(currentSnap);
+    if (scriptUndoStack.length > SCRIPT_UNDO_STACK_MAX) {
+      scriptUndoStack.shift();
+    }
+  }
+  const nextSnap = scriptRedoStack.pop();
+  applyScriptSnapshot(nextSnap);
+  updateUndoRedoButtonsUI();
+  if (typeof showToast === 'function') {
+    showToast(`🔁 Đã làm lại: ${nextSnap.desc || 'kịch bản'}`, '🔁');
+  }
+}
+
+function applyScriptSnapshot(snap) {
+  if (!snap) return;
+  if (snap.style) AppState.currentStyle = snap.style;
+  if (snap.sellingAngleKey && Array.isArray(AppState.allDiscoveredAngles)) {
+    const found = AppState.allDiscoveredAngles.find(a => a.key === snap.sellingAngleKey);
+    if (found) AppState.currentSellingAngle = found;
+  }
+  if (snap.duration) AppState.currentDuration = snap.duration;
+  if (snap.pace) AppState.currentPace = snap.pace;
+
+  if (typeof document !== 'undefined') {
+    const titleEl = document.getElementById('displayVideoTitle');
+    if (titleEl && snap.videoTitle) titleEl.textContent = snap.videoTitle;
+
+    const bStyle = document.getElementById('displayBadgeStyle');
+    if (bStyle && snap.badgeStyle) bStyle.innerHTML = snap.badgeStyle;
+
+    const bAngle = document.getElementById('displayBadgeAngle');
+    if (bAngle && snap.badgeAngle) bAngle.innerHTML = snap.badgeAngle;
+
+    const bDur = document.getElementById('displayBadgeDuration');
+    if (bDur && snap.badgeDuration) bDur.innerHTML = snap.badgeDuration;
+
+    const hookEl = document.getElementById('displayHookContent');
+    if (hookEl && snap.hookText) hookEl.textContent = snap.hookText;
+
+    const tbody = document.getElementById('scriptTableBody');
+    if (tbody && snap.tableHtml) tbody.innerHTML = snap.tableHtml;
+  }
+
+  if (typeof renderBlockSellingAngles === 'function' && AppState.currentPropertyData) {
+    try { renderBlockSellingAngles(AppState.currentPropertyData); } catch (e) {}
+  }
+  if (typeof updateDurationUI === 'function') {
+    try { updateDurationUI(AppState.currentDuration, AppState.currentPace); } catch (e) {}
+  }
+}
+
+function updateUndoRedoButtonsUI() {
+  if (typeof document === 'undefined') return;
+  const btnUndo = document.getElementById('btnScriptUndo');
+  const btnRedo = document.getElementById('btnScriptRedo');
+  if (btnUndo) {
+    const canUndo = scriptUndoStack.length > 0;
+    btnUndo.disabled = !canUndo;
+    btnUndo.style.opacity = canUndo ? '1' : '0.45';
+    btnUndo.style.cursor = canUndo ? 'pointer' : 'not-allowed';
+    btnUndo.title = canUndo ? `Hoàn tác kịch bản (Ctrl+Z) - còn ${scriptUndoStack.length} bước` : 'Chưa có thao tác nào để hoàn tác (Ctrl+Z)';
+  }
+  if (btnRedo) {
+    const canRedo = scriptRedoStack.length > 0;
+    btnRedo.disabled = !canRedo;
+    btnRedo.style.opacity = canRedo ? '1' : '0.45';
+    btnRedo.style.cursor = canRedo ? 'pointer' : 'not-allowed';
+    btnRedo.title = canRedo ? `Làm lại thao tác kịch bản (Ctrl+Y) - còn ${scriptRedoStack.length} bước` : 'Chưa có thao tác nào để làm lại (Ctrl+Y)';
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.scriptUndoStack = scriptUndoStack;
+  window.scriptRedoStack = scriptRedoStack;
+  window.SCRIPT_UNDO_STACK_MAX = SCRIPT_UNDO_STACK_MAX;
+  window.resetScriptUndoStack = resetScriptUndoStack;
+  window.captureCurrentScriptSnapshot = captureCurrentScriptSnapshot;
+  window.pushScriptSnapshot = pushScriptSnapshot;
+  window.undoScriptState = undoScriptState;
+  window.redoScriptState = redoScriptState;
+  window.applyScriptSnapshot = applyScriptSnapshot;
+  window.updateUndoRedoButtonsUI = updateUndoRedoButtonsUI;
+}
+
 function changeSellingAngle(newAngleKey) {
   if (!AppState.currentPropertyData) return;
+  pushScriptSnapshot(`Góc bán: ${AppState.currentSellingAngle ? AppState.currentSellingAngle.name : ''}`);
 
   const found = AppState.allDiscoveredAngles.find(a => a.key === newAngleKey);
   if (found) {
@@ -4204,13 +4431,16 @@ function changeSellingAngle(newAngleKey) {
 
   renderBlockSellingAngles(AppState.currentPropertyData);
   renderActiveScript();
+  updateUndoRedoButtonsUI();
   showToast(`🧭 Đã đổi góc bán sang: ${AppState.currentSellingAngle.name}`, '🔄');
 }
 
 function changeVideoStyle(newStyleKey) {
   if (!AppState.currentPropertyData) return;
+  pushScriptSnapshot(`Phong cách: ${STYLE_DEFINITIONS[AppState.currentStyle] ? STYLE_DEFINITIONS[AppState.currentStyle].name : AppState.currentStyle}`);
   AppState.currentStyle = newStyleKey;
   renderActiveScript();
+  updateUndoRedoButtonsUI();
   showToast(`🎭 Đã đổi phong cách sang: ${STYLE_DEFINITIONS[newStyleKey].name}`, '🎭');
 }
 
@@ -4231,12 +4461,15 @@ function regenerateHook() {
 }
 
 function applyCustomHook(hookText) {
+  const currentHook = document.getElementById('displayHookContent')?.textContent?.replace(/^"|"$/g, '') || '';
+  pushScriptSnapshot(`Hook: ${currentHook.slice(0, 24)}...`);
   document.getElementById('displayHookContent').textContent = `"${hookText}"`;
   const firstRowVo = document.querySelector('#scriptTableBody tr td.voiceover-cell');
   if (firstRowVo) {
     firstRowVo.innerHTML = formatVoiceoverHtml(hookText);
   }
   closeHookModal();
+  updateUndoRedoButtonsUI();
   showToast('⚡ Đã cập nhật Hook mới vào kịch bản!', '✅');
 }
 
@@ -4245,6 +4478,9 @@ function closeHookModal() {
 }
 
 function changeDuration(newDuration, newPace) {
+  if (AppState.currentPropertyData) {
+    pushScriptSnapshot(`Thời lượng: ${AppState.currentDuration}s`);
+  }
   const parsed = parseInt(newDuration, 10);
   if (!isNaN(parsed)) {
     AppState.currentDuration = Math.max(10, Math.min(300, parsed));
@@ -4257,16 +4493,21 @@ function changeDuration(newDuration, newPace) {
 
   if (AppState.currentPropertyData) {
     renderActiveScript();
+    updateUndoRedoButtonsUI();
     showToast(`⏱️ Đã tính toán lại kịch bản cho video ${AppState.currentDuration}s (${getPaceLabel(AppState.currentPace)})`, '⏱️');
   }
 }
 
 function changePace(newPace) {
   if (newPace && ['fast', 'standard', 'relaxed'].includes(newPace)) {
+    if (AppState.currentPropertyData) {
+      pushScriptSnapshot(`Nhịp điệu: ${getPaceLabel(AppState.currentPace)}`);
+    }
     AppState.currentPace = newPace;
     updateDurationUI(AppState.currentDuration, AppState.currentPace);
     if (AppState.currentPropertyData) {
       renderActiveScript();
+      updateUndoRedoButtonsUI();
       showToast(`🎙️ Đã đổi nhịp điệu giọng đọc: ${getPaceLabel(AppState.currentPace)}`, '🎙️');
     }
   }
@@ -4522,20 +4763,56 @@ function fallbackCopyText(text, label) {
   document.body.removeChild(textArea);
 }
 
-function showToast(message, icon = '✅') {
+let toastNotificationTimer = null;
+
+function showToast(message, icon = '✅', actionConfig = null) {
   if (typeof document === 'undefined') return;
   const toast = document.getElementById('toastNotification');
   if (!toast) return;
   const iconEl = document.getElementById('toastIcon');
   const msgEl = document.getElementById('toastMessage');
+  const actionBtn = document.getElementById('toastActionBtn');
 
-  iconEl.textContent = icon;
-  msgEl.textContent = message;
+  if (iconEl) iconEl.textContent = icon;
+  if (msgEl) msgEl.textContent = message;
+
+  if (toastNotificationTimer) {
+    clearTimeout(toastNotificationTimer);
+    toastNotificationTimer = null;
+  }
+
+  if (actionBtn) {
+    const actText = actionConfig && (actionConfig.text || actionConfig.actionText);
+    const actFn = actionConfig && (actionConfig.callback || actionConfig.onAction);
+    if (actText && typeof actFn === 'function') {
+      actionBtn.textContent = actText;
+      actionBtn.style.display = 'inline-block';
+      actionBtn.onclick = (e) => {
+        if (e && e.stopPropagation) e.stopPropagation();
+        hideToast();
+        actFn();
+      };
+    } else {
+      actionBtn.style.display = 'none';
+      actionBtn.onclick = null;
+    }
+  }
 
   toast.classList.add('show');
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2800);
+  const duration = (actionConfig && actionConfig.duration) ? actionConfig.duration : (actionConfig ? 7000 : 2800);
+  toastNotificationTimer = setTimeout(() => {
+    hideToast();
+  }, duration);
+}
+
+function hideToast() {
+  if (typeof document === 'undefined') return;
+  const toast = document.getElementById('toastNotification');
+  if (toast) toast.classList.remove('show');
+  if (toastNotificationTimer) {
+    clearTimeout(toastNotificationTimer);
+    toastNotificationTimer = null;
+  }
 }
 
 function escapeHtml(str) {
@@ -5008,11 +5285,17 @@ function savePropertiesList(list) {
     } catch (e) {
       console.error('Failed to save to localStorage:', e);
       if (typeof showToast === 'function') {
-        showToast('Lỗi dung lượng bộ nhớ khi lưu!', '⚠️');
+        showToast('🚨 Bộ nhớ máy gần đầy! Vui lòng mở Sao Lưu Cloud để tải file dự phòng.', '⚠️');
+      }
+      if (typeof openCloudBackupModal === 'function') {
+        openCloudBackupModal();
       }
     }
   }
   updateSavedPropertiesBadge();
+  if (typeof updateStorageQuotaDisplay === 'function') {
+    updateStorageQuotaDisplay();
+  }
 }
 
 function updateSavedPropertiesBadge() {
@@ -5029,6 +5312,116 @@ function updateSavedPropertiesBadge() {
   const countText = document.getElementById('savedPropsCountText');
   if (countText) {
     countText.textContent = `Đang có ${count} căn nhà trong kho lưu trữ`;
+  }
+}
+
+// 9 Phân Khúc Giá Bất Động Sản Chuẩn Môi Giới
+const REAL_ESTATE_PRICE_SEGMENTS = [
+  { id: 'ALL', label: 'Tất cả khoảng giá', min: 0, max: Infinity },
+  { id: '<3', label: '< 3 tỷ (Dưới 3 tỷ)', min: 0, max: 3 },
+  { id: '3-6', label: '3 - 6 tỷ', min: 3, max: 6 },
+  { id: '6-9', label: '6 - 9 tỷ', min: 6, max: 9 },
+  { id: '9-15', label: '9 - 15 tỷ', min: 9, max: 15 },
+  { id: '15-20', label: '15 - 20 tỷ', min: 15, max: 20 },
+  { id: '20-30', label: '20 - 30 tỷ', min: 20, max: 30 },
+  { id: '30-40', label: '30 - 40 tỷ', min: 30, max: 40 },
+  { id: '40-50', label: '40 - 50 tỷ', min: 40, max: 50 },
+  { id: '>50', label: '> 50 tỷ (Trên 50 tỷ)', min: 50, max: Infinity }
+];
+
+function getPropertyPriceValue(item) {
+  if (!item) return null;
+  // 1. Kiểm tra thuộc tính priceValue đã lưu
+  if (item.propertyData && item.propertyData.price && typeof item.propertyData.price.priceValue === 'number' && !isNaN(item.propertyData.price.priceValue)) {
+    return item.propertyData.price.priceValue;
+  }
+  // 2. Thử bóc tách từ askingPrice
+  const asking = (item.propertyData && item.propertyData.price && item.propertyData.price.askingPrice) || '';
+  if (asking) {
+    const parsed = (typeof parseRealEstatePrice === 'function') ? parseRealEstatePrice(asking) : null;
+    if (parsed && typeof parsed.priceValue === 'number' && !isNaN(parsed.priceValue)) {
+      return parsed.priceValue;
+    }
+  }
+  // 3. Thử bóc tách từ title hoặc rawText
+  const fullText = `${item.title || ''} ${item.rawText || ''}`;
+  if (fullText.trim()) {
+    const parsed = (typeof parseRealEstatePrice === 'function') ? parseRealEstatePrice(fullText) : null;
+    if (parsed && typeof parsed.priceValue === 'number' && !isNaN(parsed.priceValue)) {
+      return parsed.priceValue;
+    }
+  }
+  return null;
+}
+
+function matchPriceSegment(priceVal, segmentKey) {
+  if (!segmentKey || segmentKey === 'ALL') return true;
+  if (priceVal === null || priceVal === undefined || isNaN(priceVal)) return false;
+  switch (segmentKey) {
+    case '<3':
+      return priceVal < 3;
+    case '3-6':
+      return priceVal >= 3 && priceVal <= 6;
+    case '6-9':
+      return priceVal > 6 && priceVal <= 9;
+    case '9-15':
+      return priceVal > 9 && priceVal <= 15;
+    case '15-20':
+      return priceVal > 15 && priceVal <= 20;
+    case '20-30':
+      return priceVal > 20 && priceVal <= 30;
+    case '30-40':
+      return priceVal > 30 && priceVal <= 40;
+    case '40-50':
+      return priceVal > 40 && priceVal <= 50;
+    case '>50':
+      return priceVal > 50;
+    default:
+      return true;
+  }
+}
+
+function getPriceSegmentLabel(priceVal) {
+  if (priceVal === null || priceVal === undefined || isNaN(priceVal)) return '';
+  if (priceVal < 3) return '< 3 tỷ';
+  if (priceVal >= 3 && priceVal <= 6) return '3 - 6 tỷ';
+  if (priceVal > 6 && priceVal <= 9) return '6 - 9 tỷ';
+  if (priceVal > 9 && priceVal <= 15) return '9 - 15 tỷ';
+  if (priceVal > 15 && priceVal <= 20) return '15 - 20 tỷ';
+  if (priceVal > 20 && priceVal <= 30) return '20 - 30 tỷ';
+  if (priceVal > 30 && priceVal <= 40) return '30 - 40 tỷ';
+  if (priceVal > 40 && priceVal <= 50) return '40 - 50 tỷ';
+  if (priceVal > 50) return '> 50 tỷ';
+  return '';
+}
+
+function selectSavedPropPriceSegment(segmentKey) {
+  if (typeof document === 'undefined') return;
+  const priceSelect = document.getElementById('savedPropPriceFilter');
+  if (priceSelect) {
+    priceSelect.value = segmentKey;
+  }
+  const chips = document.querySelectorAll('#savedPropPriceChips .prop-price-chip');
+  if (chips && chips.length > 0) {
+    chips.forEach(btn => {
+      if (btn.getAttribute('data-segment') === segmentKey) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+  renderSavedPropertiesList(undefined, undefined, segmentKey);
+}
+
+function applyManualPriceQuick(priceText) {
+  if (typeof document === 'undefined') return;
+  const input = document.getElementById('manualPrice');
+  if (!input) return;
+  input.value = priceText;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  if (typeof showToast === 'function') {
+    showToast(`Đã chọn phân khúc: ${priceText}`, '💰');
   }
 }
 
@@ -5056,15 +5449,29 @@ function populateSavedPropsDistrictFilter() {
   }
 }
 
-function renderSavedPropertiesList(filterDistrict, query) {
+function renderSavedPropertiesList(filterDistrict, query, filterPrice) {
   if (typeof document === 'undefined') return;
   const container = document.getElementById('savedPropsList');
   if (!container) return;
 
   const distSelect = document.getElementById('savedPropDistrictFilter');
+  const priceSelect = document.getElementById('savedPropPriceFilter');
   const searchInput = document.getElementById('savedPropSearchInput');
   const activeDist = filterDistrict !== undefined ? filterDistrict : (distSelect ? distSelect.value : 'ALL');
+  const activePrice = filterPrice !== undefined ? filterPrice : (priceSelect ? priceSelect.value : 'ALL');
   const activeQuery = query !== undefined ? query : (searchInput ? searchInput.value.trim().toLowerCase() : '');
+
+  // Cập nhật trạng thái active của Chips
+  const chips = document.querySelectorAll('#savedPropPriceChips .prop-price-chip');
+  if (chips && chips.length > 0) {
+    chips.forEach(btn => {
+      if (btn.getAttribute('data-segment') === activePrice) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
 
   const list = getSavedProperties();
 
@@ -5073,6 +5480,12 @@ function renderSavedPropertiesList(filterDistrict, query) {
     filtered = filtered.filter(p => {
       const d = (p.propertyData && p.propertyData.location && p.propertyData.location.district) || '';
       return d.toLowerCase() === activeDist.toLowerCase();
+    });
+  }
+  if (activePrice && activePrice !== 'ALL') {
+    filtered = filtered.filter(p => {
+      const pVal = getPropertyPriceValue(p);
+      return matchPriceSegment(pVal, activePrice);
     });
   }
   if (activeQuery) {
@@ -5096,9 +5509,9 @@ function renderSavedPropertiesList(filterDistrict, query) {
       <div class="saved-prop-empty">
         <div style="font-size: 2.2rem;">🏚️</div>
         <div style="font-size: 0.95rem; font-weight: 600; color: #94a3b8;">Không tìm thấy căn nhà nào phù hợp bộ lọc</div>
-        <div style="font-size: 0.8rem; color: #64748b;">Bạn có thể lưu thông tin căn đang mở hoặc xóa bộ lọc tìm kiếm.</div>
-        <button type="button" class="btn-secondary" onclick="openSaveCurrentModal()" style="margin-top: 0.4rem;">
-          ➕ Lưu căn đang mở vào kho
+        <div style="font-size: 0.8rem; color: #64748b;">Bạn có thể đổi phân khúc giá hoặc xóa bộ lọc tìm kiếm.</div>
+        <button type="button" class="btn-secondary" onclick="selectSavedPropPriceSegment('ALL')" style="margin-top: 0.4rem;">
+          🔄 Xem tất cả khoảng giá
         </button>
       </div>
     `;
@@ -5127,7 +5540,9 @@ function renderSavedPropertiesList(filterDistrict, query) {
     const styleName = (STYLE_DEFINITIONS[item.style] && STYLE_DEFINITIONS[item.style].name) || 'Mặc định';
     const durationText = item.duration ? `${item.duration}s` : '60s';
 
-    const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const itemPriceVal = getPropertyPriceValue(item);
+    const segBadge = getPriceSegmentLabel(itemPriceVal);
+    const dateStr = item.savedAt ? new Date(item.savedAt).toLocaleDateString('vi-VN') : (item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('vi-VN') : 'Mới đây');
 
     return `
       <div class="saved-prop-card ${isCurrentlyActive ? 'active-loaded' : ''}" id="card_${item.id}">
@@ -5143,6 +5558,7 @@ function renderSavedPropertiesList(filterDistrict, query) {
 
         <div class="saved-prop-specs">
           <span class="spec-pill price">💰 ${escapeHtml(priceText)}</span>
+          ${segBadge ? `<span class="spec-pill" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">🏷️ ${escapeHtml(segBadge)}</span>` : ''}
           <span class="spec-pill location">📍 ${escapeHtml(locText)}</span>
           ${areaText ? `<span class="spec-pill">📐 ${escapeHtml(areaText)}</span>` : ''}
           ${structText ? `<span class="spec-pill">🏠 ${escapeHtml(structText)}</span>` : ''}
@@ -5188,7 +5604,12 @@ function openSavedPropertiesModal() {
   const modal = document.getElementById('savedPropertiesModal');
   if (!modal) return;
   populateSavedPropsDistrictFilter();
-  renderSavedPropertiesList();
+  const priceSelect = document.getElementById('savedPropPriceFilter');
+  const activePrice = priceSelect ? priceSelect.value : 'ALL';
+  renderSavedPropertiesList(undefined, undefined, activePrice);
+  if (typeof updateStorageQuotaDisplay === 'function') {
+    updateStorageQuotaDisplay();
+  }
   modal.classList.add('open');
   modal.classList.add('visible');
   modal.style.display = 'flex';
@@ -5293,11 +5714,18 @@ function closeSaveCurrentModal() {
   modal.style.display = 'none';
 }
 
+function sanitizePropertyText(text) {
+  if (!text || typeof text !== 'string') return '';
+  // Tự động làm sạch các chuỗi base64 ảnh rác dài hơn 150 ký tự nếu lỡ dán lẫn vào văn bản
+  return text.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[a-zA-Z0-9+/=]{150,}/g, '[Ảnh đính kèm]');
+}
+
 function savePropertyConfirmed(isUpdate) {
   const titleInput = document.getElementById('savePropTitleInput');
   const noteInput = document.getElementById('savePropNoteInput');
   const title = (titleInput && titleInput.value.trim()) || ('Căn nhà ' + new Date().toLocaleDateString('vi-VN'));
-  const notes = (noteInput && noteInput.value.trim()) || '';
+  let notes = (noteInput && noteInput.value.trim()) || '';
+  notes = sanitizePropertyText(notes);
 
   let rawText = '';
   const rawEl = document.getElementById('rawInfoInput');
@@ -5310,6 +5738,7 @@ function savePropertyConfirmed(isUpdate) {
     } catch (e) {}
   }
   if (!rawText) rawText = SAMPLE_RAW_DATA;
+  rawText = sanitizePropertyText(rawText);
 
   let propData = AppState.currentPropertyData;
   if (!propData) {
@@ -5414,7 +5843,8 @@ function loadSavedProperty(id) {
 
 function deleteSavedProperty(id) {
   const list = getSavedProperties();
-  const item = list.find(p => p.id === id);
+  const index = list.findIndex(p => p.id === id);
+  const item = list[index];
   const itemName = item ? item.title : 'căn nhà này';
 
   if (typeof confirm === 'function') {
@@ -5429,20 +5859,53 @@ function deleteSavedProperty(id) {
   savePropertiesList(updatedList);
   populateSavedPropsDistrictFilter();
   renderSavedPropertiesList();
-  showToast(`Đã xóa "${itemName}" khỏi kho!`, '🗑️');
+
+  showToast(`Đã xóa "${itemName}" khỏi kho!`, '🗑️', {
+    text: '↩️ Hoàn tác',
+    callback: () => {
+      const cur = getSavedProperties();
+      const restored = [...cur];
+      if (index >= 0 && index <= restored.length) {
+        restored.splice(index, 0, item);
+      } else {
+        restored.push(item);
+      }
+      savePropertiesList(restored);
+      populateSavedPropsDistrictFilter();
+      renderSavedPropertiesList();
+      showToast(`✅ Đã khôi phục căn: ${itemName}`, '↩️');
+    },
+    duration: 8000
+  });
 }
 
 function clearAllSavedProperties() {
+  const list = getSavedProperties();
+  if (list.length === 0) {
+    showToast('Kho nhà đang trống!', 'ℹ️');
+    return;
+  }
   if (typeof confirm === 'function') {
     const ok = confirm('CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ kho nhà đã lưu? Thao tác này sẽ xóa sạch dữ liệu trên trình duyệt!');
     if (!ok) return;
   }
 
+  const backupList = [...list];
   AppState.currentSavedPropertyId = null;
   savePropertiesList([]);
   populateSavedPropsDistrictFilter();
   renderSavedPropertiesList();
-  showToast('Đã dọn sạch toàn bộ kho nhà!', '🧹');
+
+  showToast('Đã dọn sạch toàn bộ kho nhà!', '🧹', {
+    text: '↩️ Hoàn tác',
+    callback: () => {
+      savePropertiesList(backupList);
+      populateSavedPropsDistrictFilter();
+      renderSavedPropertiesList();
+      showToast(`✅ Đã khôi phục lại toàn bộ ${backupList.length} căn nhà!`, '↩️');
+    },
+    duration: 10000
+  });
 }
 
 function exportSavedPropertiesJson() {
@@ -6462,24 +6925,131 @@ function renderAvatarInDOM(avatarData) {
   }
 }
 
+/**
+ * Tự động nén ảnh client-side qua HTML5 Canvas
+ * Thu nhỏ về kích thước chuẩn (180x180 px), nén JPEG 78% giúp ảnh chỉ nặng ~15-25 KB (giảm 99% dung lượng so với ảnh gốc 2-5 MB)
+ */
+function compressImageToDataUrl(source, maxWidth = 180, maxHeight = 180, quality = 0.78, callback) {
+  if (!source) {
+    if (typeof callback === 'function') callback('');
+    return;
+  }
+
+  function processImageElement(img) {
+    let width = img.naturalWidth || img.width || 180;
+    let height = img.naturalHeight || img.height || 180;
+
+    if (width > height) {
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+    } else {
+      if (height > maxHeight) {
+        width = Math.round((width * maxHeight) / height);
+        height = maxHeight;
+      }
+    }
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        if (typeof callback === 'function') callback(typeof source === 'string' ? source : '');
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      if (typeof callback === 'function') callback(compressed);
+    } catch (err) {
+      console.warn('Lỗi khi nén ảnh qua Canvas:', err);
+      if (typeof callback === 'function') callback(typeof source === 'string' ? source : '');
+    }
+  }
+
+  const img = new Image();
+  img.onload = function() {
+    processImageElement(img);
+  };
+  img.onerror = function() {
+    console.warn('Không thể đọc ảnh để nén');
+    if (typeof callback === 'function') callback(typeof source === 'string' ? source : '');
+  };
+
+  if (typeof source === 'string') {
+    img.src = source;
+  } else if (typeof FileReader !== 'undefined' && (source instanceof Blob || source instanceof File)) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      img.src = e.target.result;
+    };
+    reader.onerror = function() {
+      if (typeof callback === 'function') callback('');
+    };
+    reader.readAsDataURL(source);
+  } else {
+    if (typeof callback === 'function') callback('');
+  }
+}
+
 function handleProfileAvatarSelected(input) {
   if (!input || !input.files || !input.files[0]) return;
   const file = input.files[0];
-  if (file.size > 2 * 1024 * 1024) {
-    showToast('⚠️ Vui lòng chọn ảnh dung lượng dưới 2MB!', '⚠️');
-    return;
+
+  if (typeof showToast === 'function') {
+    showToast('⏳ Đang tối ưu hóa & nén ảnh avatar siêu nhẹ...', '📸');
   }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    const avatarData = e.target.result;
+
+  // Tự động nén qua Canvas về chuẩn 180x180 px, chất lượng 78% (chỉ tốn ~15-25 KB)
+  compressImageToDataUrl(file, 180, 180, 0.78, (compressedAvatar) => {
+    if (!compressedAvatar) {
+      if (typeof showToast === 'function') {
+        showToast('❌ Không thể xử lý ảnh này, vui lòng thử ảnh khác!', '⚠️');
+      }
+      return;
+    }
+
     const p = getUserProfile();
-    p.avatar = avatarData;
+    p.avatar = compressedAvatar;
     saveUserProfile(p);
-    renderAvatarInDOM(avatarData);
+    renderAvatarInDOM(compressedAvatar);
     renderProfilePreview();
-    showToast('📸 Đã cập nhật ảnh đại diện!', '✨');
-  };
-  reader.readAsDataURL(file);
+
+    if (typeof updateStorageQuotaDisplay === 'function') {
+      updateStorageQuotaDisplay();
+    }
+
+    const approxKB = Math.round((compressedAvatar.length * 2) / 1024);
+    if (typeof showToast === 'function') {
+      showToast(`📸 Đã nén ảnh đại diện siêu nhẹ (~${approxKB} KB)!`, '✨');
+    }
+    if (typeof markOnboardingQuestDone === 'function') {
+      markOnboardingQuestDone(1);
+    }
+  });
+}
+
+function optimizeStoredProfileAvatar() {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    const p = getUserProfile();
+    // Nếu avatar cũ nặng hơn 35.000 ký tự (~70 KB)
+    if (p && p.avatar && typeof p.avatar === 'string' && p.avatar.length > 35000) {
+      compressImageToDataUrl(p.avatar, 180, 180, 0.78, (compressed) => {
+        if (compressed && compressed.length < p.avatar.length) {
+          const oldLen = p.avatar.length;
+          p.avatar = compressed;
+          saveUserProfile(p);
+          if (typeof renderAvatarInDOM === 'function') renderAvatarInDOM(compressed);
+          if (typeof updateStorageQuotaDisplay === 'function') updateStorageQuotaDisplay();
+          const freedKB = Math.round(((oldLen - compressed.length) * 2) / 1024);
+          console.log(`Đã tự động tối ưu hóa avatar cũ, giải phóng ${freedKB} KB!`);
+        }
+      });
+    }
+  } catch (e) {}
 }
 
 function removeProfileAvatar() {
@@ -6589,6 +7159,9 @@ function saveUserProfileFromUI() {
   }
 
   showToast('💾 Đã lưu hồ sơ thành công! Mọi content tạo mới sẽ tự động gắn thông tin của bạn.', '✅');
+  if (typeof markOnboardingQuestDone === 'function') {
+    markOnboardingQuestDone(1);
+  }
 }
 
 function clearUserProfileFromUI() {
@@ -8983,21 +9556,52 @@ function toggleReminderDone(id) {
 }
 
 function deleteReminder(id) {
-  const reminders = getCrmReminders().filter(r => r.id !== id);
+  const all = getCrmReminders();
+  const deletedItem = all.find(r => r.id === id);
+  const deletedIndex = all.findIndex(r => r.id === id);
+  const reminders = all.filter(r => r.id !== id);
   saveCrmReminders(reminders);
-  showToast('🗑️ Đã xóa nhắc nhở!', '🗑️');
+
+  if (typeof showToast === 'function') {
+    showToast('🗑️ Đã xóa nhắc nhở!', '🗑️', {
+      actionText: '↩️ Hoàn tác',
+      duration: 7000,
+      onAction: () => {
+        if (deletedItem) {
+          const currentList = getCrmReminders();
+          if (deletedIndex >= 0 && deletedIndex <= currentList.length) {
+            currentList.splice(deletedIndex, 0, deletedItem);
+          } else {
+            currentList.push(deletedItem);
+          }
+          saveCrmReminders(currentList);
+          showToast(`↩️ Đã khôi phục nhắc lịch "${deletedItem.clientName || 'nhắc nhở'}"!`, '✅');
+        }
+      }
+    });
+  }
 }
 
 function clearDoneReminders() {
   const reminders = getCrmReminders();
+  const clearedItems = reminders.filter(r => r.done);
   const remaining = reminders.filter(r => !r.done);
-  const countCleared = reminders.length - remaining.length;
+  const countCleared = clearedItems.length;
   if (countCleared === 0) {
     showToast('ℹ️ Không có nhắc lịch đã xong nào để xóa!', 'ℹ️');
     return;
   }
   saveCrmReminders(remaining);
-  showToast(`🗑️ Đã xóa ${countCleared} nhắc lịch đã xong!`, '🗑️');
+  showToast(`🗑️ Đã xóa ${countCleared} nhắc lịch đã xong!`, '🗑️', {
+    actionText: '↩️ Hoàn tác',
+    duration: 7000,
+    onAction: () => {
+      const currentList = getCrmReminders();
+      const restored = [...currentList, ...clearedItems];
+      saveCrmReminders(restored);
+      showToast(`↩️ Đã khôi phục ${clearedItems.length} nhắc lịch!`, '✅');
+    }
+  });
 }
 
 function setQuickReminderTime(amount, unit) {
@@ -13777,8 +14381,23 @@ if (typeof document !== 'undefined') {
     const btnClearInput = document.getElementById('btnClearInput');
     if (btnClearInput) {
       btnClearInput.addEventListener('click', () => {
-        document.getElementById('rawInfoInput').value = '';
-        showToast('Đã xóa trắng thông tin.', '🧹');
+        const rawEl = document.getElementById('rawInfoInput');
+        const prevText = rawEl ? rawEl.value : '';
+        if (rawEl) rawEl.value = '';
+        if (prevText && prevText.trim()) {
+          showToast('Đã xóa trắng thông tin.', '🧹', {
+            actionText: '↩️ Hoàn tác',
+            duration: 7000,
+            onAction: () => {
+              if (rawEl) {
+                rawEl.value = prevText;
+                showToast('↩️ Đã khôi phục nội dung văn bản thô!', '✅');
+              }
+            }
+          });
+        } else {
+          showToast('Đã xóa trắng thông tin.', '🧹');
+        }
       });
     }
 
@@ -13868,6 +14487,40 @@ if (typeof document !== 'undefined') {
     const btnQuickHook = document.getElementById('btnQuickRegenHook');
     if (btnQuickHook) btnQuickHook.addEventListener('click', regenerateHook);
 
+    const btnScriptUndo = document.getElementById('btnScriptUndo');
+    if (btnScriptUndo) btnScriptUndo.addEventListener('click', undoScriptState);
+
+    const btnScriptRedo = document.getElementById('btnScriptRedo');
+    if (btnScriptRedo) btnScriptRedo.addEventListener('click', redoScriptState);
+
+    // Global keyboard shortcuts for Tier 2 Undo/Redo (Ctrl+Z, Ctrl+Y, Ctrl+Shift+Z)
+    document.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable
+      );
+      if (isInput) return;
+
+      if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+        if (e.key === 'z' || e.key === 'Z') {
+          if (e.shiftKey) {
+            e.preventDefault();
+            redoScriptState();
+          } else {
+            e.preventDefault();
+            undoScriptState();
+          }
+        } else if (e.key === 'y' || e.key === 'Y') {
+          e.preventDefault();
+          redoScriptState();
+        }
+      }
+    });
+
+    updateUndoRedoButtonsUI();
+
 
     const btnCopyEntire = document.getElementById('btnCopyEntireVideo');
     if (btnCopyEntire) btnCopyEntire.addEventListener('click', copyEntireCurrentScript);
@@ -13935,8 +14588,22 @@ if (typeof document !== 'undefined') {
     const savedPropDist = document.getElementById('savedPropDistrictFilter');
     if (savedPropDist) {
       savedPropDist.addEventListener('change', (e) => {
-        renderSavedPropertiesList(e.target.value, undefined);
+        renderSavedPropertiesList(e.target.value, undefined, undefined);
       });
+    }
+    const savedPropPrice = document.getElementById('savedPropPriceFilter');
+    if (savedPropPrice) {
+      savedPropPrice.addEventListener('change', (e) => {
+        selectSavedPropPriceSegment(e.target.value);
+      });
+    }
+
+    // Storage Quota initial check & display
+    if (typeof updateStorageQuotaDisplay === 'function') {
+      updateStorageQuotaDisplay();
+    }
+    if (typeof optimizeStoredProfileAvatar === 'function') {
+      setTimeout(optimizeStoredProfileAvatar, 800);
     }
 
     // Subsystem Switchers (Header & Nav double-wiring)
@@ -13990,6 +14657,11 @@ if (typeof document !== 'undefined') {
     // Initialize Checklist badge
     if (typeof updateChecklistHeaderBadge === 'function') {
       updateChecklistHeaderBadge();
+    }
+
+    // Initialize Onboarding & Gamified Quest Engine
+    if (typeof initOnboardingSystem === 'function') {
+      initOnboardingSystem();
     }
   });
 }
@@ -16188,6 +16860,10 @@ let reflexSurvivalTimeLeft = 10.0;
 let reflexSurvivalStreak = 0;
 let reflexAutoSpeech = false;
 const STORAGE_KEY_REFLEX_AUTO_SPEECH = 'ref_auto_speech_enabled';
+let reflexShuffleEnabled = true;
+const STORAGE_KEY_REFLEX_SHUFFLE = 'ref_shuffle_enabled';
+let reflexShuffledOrders = {}; // { [trackKey]: [array of card indices] }
+let reflexOptionsCache = {};   // { [cardId]: [array of shuffled options] }
 let activeZaloCategory = 'ALL';
 
 // ------------------------------------------
@@ -16491,10 +17167,123 @@ function updateSurvivalTimerUI() {
   }
 }
 
+// ------------------------------------------
+// SHUFFLE ENGINE CHO PHÒNG PHẢN XẠ & QUIZ (CHỐNG HỌC VẸT VỊ TRÍ)
+// Thuật toán chuẩn Fisher-Yates Shuffle O(N)
+// ------------------------------------------
+function shuffleArray(array) {
+  if (!Array.isArray(array)) return [];
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function getReflexCardOrder(trackKey) {
+  const track = REFLEX_TRACKS_DATA[trackKey];
+  if (!track || !track.cards) return [];
+  const len = track.cards.length;
+  if (!reflexShuffleEnabled) {
+    return Array.from({ length: len }, (_, i) => i);
+  }
+  if (!reflexShuffledOrders[trackKey] || reflexShuffledOrders[trackKey].length !== len) {
+    const naturalIndices = Array.from({ length: len }, (_, i) => i);
+    reflexShuffledOrders[trackKey] = shuffleArray(naturalIndices);
+  }
+  return reflexShuffledOrders[trackKey];
+}
+
+function getReflexActiveCard() {
+  const track = REFLEX_TRACKS_DATA[activeReflexTrack];
+  if (!track || !track.cards || track.cards.length === 0) return null;
+  const order = getReflexCardOrder(activeReflexTrack);
+  if (activeReflexCardIdx >= order.length) activeReflexCardIdx = order.length - 1;
+  if (activeReflexCardIdx < 0) activeReflexCardIdx = 0;
+  const realIdx = order[activeReflexCardIdx];
+  return track.cards[realIdx] || track.cards[0];
+}
+
+function getReflexCardOptions(card) {
+  if (!card || !card.quizOptions) return [];
+  if (!reflexShuffleEnabled) {
+    return card.quizOptions;
+  }
+  if (!reflexOptionsCache[card.id]) {
+    reflexOptionsCache[card.id] = shuffleArray(card.quizOptions);
+  }
+  return reflexOptionsCache[card.id];
+}
+
+function isReflexOptionSelected(cardId, option, displayIdx) {
+  const state = getReflexTrainingState();
+  const cardState = state[cardId];
+  if (!cardState) return false;
+  if (cardState.selectedText && option) {
+    return cardState.selectedText === option.text;
+  }
+  return cardState.quizSelected === displayIdx;
+}
+
+function toggleReflexShuffle(enabled) {
+  reflexShuffleEnabled = !!enabled;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(STORAGE_KEY_REFLEX_SHUFFLE, reflexShuffleEnabled ? '1' : '0');
+    } catch (e) {}
+  }
+  reflexShuffledOrders = {};
+  reflexOptionsCache = {};
+  activeReflexCardIdx = 0;
+  reflexCardFlipped = false;
+  const chk = document.getElementById('chkReflexShuffle');
+  if (chk) chk.checked = reflexShuffleEnabled;
+  if (typeof showToast === 'function') {
+    if (reflexShuffleEnabled) {
+      showToast('🎲 Đã BẬT xáo trộn ngẫu nhiên (Chống học vẹt vị trí)!', '⚡');
+    } else {
+      showToast('📋 Đã chuyển sang thứ tự tuần tự (Theo giáo trình)', '📖');
+    }
+  }
+  renderReflexArena();
+}
+
+function reshuffleReflexQuiz() {
+  stopSurvivalTimer();
+  reflexShuffledOrders = {};
+  reflexOptionsCache = {};
+  activeReflexCardIdx = 0;
+  reflexCardFlipped = false;
+  reflexSurvivalStreak = 0;
+  getReflexCardOrder(activeReflexTrack);
+  if (typeof showToast === 'function') {
+    showToast('🎲 Đã xáo trộn ngẫu nhiên toàn bộ câu hỏi & đáp án!', '✨');
+  }
+  renderReflexArena();
+}
+
+function initReflexShuffleState() {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_REFLEX_SHUFFLE);
+      reflexShuffleEnabled = (saved === null) ? true : (saved === '1');
+    } catch (e) {
+      reflexShuffleEnabled = true;
+    }
+  }
+  if (typeof document !== 'undefined') {
+    const chk = document.getElementById('chkReflexShuffle');
+    if (chk) {
+      chk.checked = reflexShuffleEnabled;
+    }
+  }
+}
+
 function handleSurvivalTimeout() {
   const track = REFLEX_TRACKS_DATA[activeReflexTrack];
   if (!track || !track.cards) return;
-  const card = track.cards[activeReflexCardIdx];
+  const card = getReflexActiveCard();
   if (!card) return;
 
   playReflexAudioTone('timeout');
@@ -16523,6 +17312,7 @@ function selectReflexTrack(trackKey) {
   activeReflexTrack = trackKey;
   activeReflexCardIdx = 0;
   reflexCardFlipped = false;
+  getReflexCardOrder(trackKey);
 
   const tracks = ['telesale', 'objections', 'showing', 'negotiation', 'closing'];
   tracks.forEach(tr => {
@@ -16584,6 +17374,10 @@ function markReflexCardMastered(cardId) {
   updateReflexScoreHeader();
   playReflexAudioTone('correct');
 
+  if (typeof markOnboardingQuestDone === 'function') {
+    markOnboardingQuestDone(3);
+  }
+
   if (typeof showToast === 'function') {
     showToast('🎉 Đã nắm vững phản xạ (+10 Điểm)!', '🏆');
   }
@@ -16602,7 +17396,14 @@ function resetReflexCardStatus(cardId) {
   const state = getReflexTrainingState();
   if (state[cardId]) {
     state[cardId].mastered = false;
+    delete state[cardId].quizSelected;
+    delete state[cardId].selectedText;
+    delete state[cardId].isCorrect;
+    delete state[cardId].isTimeout;
     saveReflexTrainingState(state);
+  }
+  if (reflexOptionsCache[cardId]) {
+    delete reflexOptionsCache[cardId];
   }
   updateReflexScoreHeader();
   if (typeof showToast === 'function') {
@@ -16614,7 +17415,7 @@ function resetReflexCardStatus(cardId) {
 function answerReflexQuiz(optionIdx) {
   const track = REFLEX_TRACKS_DATA[activeReflexTrack];
   if (!track || !track.cards) return;
-  const card = track.cards[activeReflexCardIdx];
+  const card = getReflexActiveCard();
   if (!card || !card.quizOptions) return;
 
   const isSurvival = (activeReflexMode === 'survival');
@@ -16624,12 +17425,14 @@ function answerReflexQuiz(optionIdx) {
     stopSurvivalTimer();
   }
 
-  const option = card.quizOptions[optionIdx];
+  const options = getReflexCardOptions(card);
+  const option = options[optionIdx];
   const isCorrect = !!(option && option.isCorrect);
 
   const state = getReflexTrainingState();
   if (!state[card.id]) state[card.id] = {};
   state[card.id].quizSelected = optionIdx;
+  state[card.id].selectedText = option ? option.text : '';
   state[card.id].isCorrect = isCorrect;
   state[card.id].isTimeout = false;
 
@@ -16672,6 +17475,9 @@ function answerReflexQuiz(optionIdx) {
 
   saveReflexTrainingState(state);
   updateReflexScoreHeader();
+  if (typeof markOnboardingQuestDone === 'function') {
+    markOnboardingQuestDone(3);
+  }
   renderReflexArena();
 }
 
@@ -16683,6 +17489,8 @@ function resetReflexTrainingState() {
   activeReflexCardIdx = 0;
   reflexCardFlipped = false;
   reflexSurvivalStreak = 0;
+  reflexShuffledOrders = {};
+  reflexOptionsCache = {};
   updateReflexScoreHeader();
   if (typeof showToast === 'function') {
     showToast('🔄 Đã làm mới toàn bộ bài tập & điểm thực chiến!', '🌱');
@@ -16703,7 +17511,7 @@ function renderReflexArena() {
   if (activeReflexCardIdx >= track.cards.length) activeReflexCardIdx = track.cards.length - 1;
   if (activeReflexCardIdx < 0) activeReflexCardIdx = 0;
 
-  const card = track.cards[activeReflexCardIdx];
+  const card = getReflexActiveCard();
   const total = track.cards.length;
 
   const counterEl = document.getElementById('reflexCounterDisplay');
@@ -16733,7 +17541,7 @@ function renderReflexArena() {
         <div class="reflex-scenario-head">
           <div>
             <div class="reflex-scenario-title">${card.title}</div>
-            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · Tình huống ${activeReflexCardIdx + 1} / ${total}</div>
+            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · ${reflexShuffleEnabled ? '🎲 Ngẫu nhiên' : 'Tình huống'} ${activeReflexCardIdx + 1} / ${total}</div>
           </div>
           <div>
             ${isMastered 
@@ -16820,7 +17628,7 @@ function renderReflexArena() {
         <div class="reflex-scenario-head">
           <div>
             <div class="reflex-scenario-title">${card.title}</div>
-            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · Trắc nghiệm tình huống ${activeReflexCardIdx + 1} / ${total}</div>
+            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · ${reflexShuffleEnabled ? '🎲 Đề ngẫu nhiên' : 'Trắc nghiệm'} ${activeReflexCardIdx + 1} / ${total}</div>
           </div>
           <div>
             ${isMastered 
@@ -16845,24 +17653,31 @@ function renderReflexArena() {
         </div>
 
         <div class="reflex-quiz-options-list">
-          ${card.quizOptions.map((opt, idx) => {
-            let itemClass = 'reflex-quiz-item';
-            let extraFeedback = '';
-            if (hasAnswered) {
-              if (opt.isCorrect) itemClass += ' correct';
-              else if (selectedIdx === idx) itemClass += ' wrong';
-              
-              if (selectedIdx === idx || opt.isCorrect) {
-                extraFeedback = `<div class="reflex-quiz-feedback">${opt.isCorrect ? '✅ ' : '❌ '}${opt.feedback}</div>`;
+          ${(() => {
+            const displayOptions = getReflexCardOptions(card);
+            return displayOptions.map((opt, idx) => {
+              let itemClass = 'reflex-quiz-item';
+              let extraFeedback = '';
+              const isSelected = isReflexOptionSelected(card.id, opt, idx);
+              if (hasAnswered) {
+                if (opt.isCorrect) itemClass += ' correct';
+                else if (isSelected) itemClass += ' wrong';
+                
+                if (isSelected || opt.isCorrect) {
+                  extraFeedback = `<div class="reflex-quiz-feedback">${opt.isCorrect ? '✅ ' : '❌ '}${opt.feedback}</div>`;
+                }
               }
-            }
-            return `
-              <div class="${itemClass}" onclick="answerReflexQuiz(${idx})">
-                <div style="font-weight: 600;">${opt.text}</div>
-                ${extraFeedback}
-              </div>
-            `;
-          }).join('')}
+              const letter = String.fromCharCode(65 + idx);
+              const cleanText = (opt.text || '').replace(/^[A-D]\.\s*/, '');
+              const displayText = `${letter}. ${cleanText}`;
+              return `
+                <div class="${itemClass}" onclick="answerReflexQuiz(${idx})">
+                  <div style="font-weight: 600;">${displayText}</div>
+                  ${extraFeedback}
+                </div>
+              `;
+            }).join('');
+          })()}
         </div>
 
         ${hasAnswered ? `
@@ -16914,7 +17729,7 @@ function renderReflexArena() {
         <div class="reflex-scenario-head">
           <div>
             <div class="reflex-scenario-title">${card.title}</div>
-            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · Sinh tử chiến ${activeReflexCardIdx + 1} / ${total}</div>
+            <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 0.2rem;">${track.badge} · ${reflexShuffleEnabled ? '🎲 Ngẫu nhiên 10s' : 'Sinh tử chiến'} ${activeReflexCardIdx + 1} / ${total}</div>
           </div>
           <div>
             ${isMastered 
@@ -16941,24 +17756,31 @@ function renderReflexArena() {
         </div>
 
         <div class="reflex-quiz-options-list">
-          ${card.quizOptions.map((opt, idx) => {
-            let itemClass = 'reflex-quiz-item';
-            let extraFeedback = '';
-            if (hasAnswered) {
-              if (opt.isCorrect) itemClass += ' correct';
-              else if (selectedIdx === idx) itemClass += ' wrong';
-              
-              if (selectedIdx === idx || opt.isCorrect) {
-                extraFeedback = `<div class="reflex-quiz-feedback">${opt.isCorrect ? '✅ ' : '❌ '}${opt.feedback}</div>`;
+          ${(() => {
+            const displayOptions = getReflexCardOptions(card);
+            return displayOptions.map((opt, idx) => {
+              let itemClass = 'reflex-quiz-item';
+              let extraFeedback = '';
+              const isSelected = isReflexOptionSelected(card.id, opt, idx);
+              if (hasAnswered) {
+                if (opt.isCorrect) itemClass += ' correct';
+                else if (isSelected) itemClass += ' wrong';
+                
+                if (isSelected || opt.isCorrect) {
+                  extraFeedback = `<div class="reflex-quiz-feedback">${opt.isCorrect ? '✅ ' : '❌ '}${opt.feedback}</div>`;
+                }
               }
-            }
-            return `
-              <div class="${itemClass}" onclick="${hasAnswered ? '' : `answerReflexQuiz(${idx})`}">
-                <div style="font-weight: 600;">${opt.text}</div>
-                ${extraFeedback}
-              </div>
-            `;
-          }).join('')}
+              const letter = String.fromCharCode(65 + idx);
+              const cleanText = (opt.text || '').replace(/^[A-D]\.\s*/, '');
+              const displayText = `${letter}. ${cleanText}`;
+              return `
+                <div class="${itemClass}" onclick="${hasAnswered ? '' : `answerReflexQuiz(${idx})`}">
+                  <div style="font-weight: 600;">${displayText}</div>
+                  ${extraFeedback}
+                </div>
+              `;
+            }).join('');
+          })()}
         </div>
 
         ${hasAnswered ? `
@@ -16984,6 +17806,7 @@ function renderReflexArena() {
 
 function initReflexTraining() {
   initAutoSpeechState();
+  initReflexShuffleState();
   updateReflexScoreHeader();
   renderReflexArena();
 }
@@ -18424,12 +19247,31 @@ function deleteKhaosatReport(reportId) {
     return;
   }
   const reports = getKhaosatReports();
+  const deletedReport = reports ? reports[reportId] : null;
   delete reports[reportId];
   saveKhaosatReports(reports);
 
   updateKhaosatProgress();
+  if (typeof renderKhaosatHistoryModal === 'function') {
+    try { renderKhaosatHistoryModal(); } catch (e) {}
+  }
   if (typeof showToast === 'function') {
-    showToast('🗑️ Đã xóa phiếu khảo sát thành công!', '✅');
+    showToast('🗑️ Đã xóa phiếu khảo sát thành công!', '✅', {
+      actionText: '↩️ Hoàn tác',
+      duration: 7000,
+      onAction: () => {
+        if (deletedReport) {
+          const currentReports = getKhaosatReports();
+          currentReports[reportId] = deletedReport;
+          saveKhaosatReports(currentReports);
+          updateKhaosatProgress();
+          if (typeof renderKhaosatHistoryModal === 'function') {
+            try { renderKhaosatHistoryModal(); } catch (e) {}
+          }
+          showToast(`↩️ Đã khôi phục phiếu khảo sát "${deletedReport.title || 'khảo sát'}"!`, '✅');
+        }
+      }
+    });
   }
 }
 
@@ -23643,13 +24485,292 @@ function sendBienTauToCopywriting() {
   if (typeof showToast === 'function') showToast('🚀 Đã đưa nội dung biến tấu vào Phân Hệ 02!', '✨');
 }
 
+// ========================================================
+// ONBOARDING SYSTEM & GAMIFIED QUEST ENGINE (TÂN THỦ V7 PRO)
+// ========================================================
+const STORAGE_KEY_ONBOARDING_QUESTS = 'bds_onboarding_quests_v1';
+const STORAGE_KEY_ONBOARDING_MODAL_SHOWN = 'bds_onboarding_modal_shown_v1';
+const STORAGE_KEY_ONBOARDING_MINIMIZED = 'bds_onboarding_minimized_v1';
+const STORAGE_KEY_ONBOARDING_DISMISSED = 'bds_onboarding_dismissed_v1';
+
+function getOnboardingQuestState() {
+  let state = { quest1: false, quest2: false, quest3: false, quest4: false };
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_ONBOARDING_QUESTS);
+      if (raw) state = { ...state, ...JSON.parse(raw) };
+    } catch (e) {}
+  }
+  return state;
+}
+
+function saveOnboardingQuestState(state) {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY_ONBOARDING_QUESTS, JSON.stringify(state));
+  } catch (e) {}
+}
+
+function markOnboardingQuestDone(questNum) {
+  if (questNum < 1 || questNum > 4) return;
+  const state = getOnboardingQuestState();
+  const key = 'quest' + questNum;
+  if (!state[key]) {
+    state[key] = true;
+    saveOnboardingQuestState(state);
+
+    if (typeof playReflexAudioTone === 'function') {
+      playReflexAudioTone('gold');
+    }
+
+    const titles = [
+      '',
+      '🥇 Nhiệm Vụ 1: Hồ Sơ Chuyên Nghiệp (+20đ)!',
+      '🥈 Nhiệm Vụ 2: Kích Hoạt Kịch Bản Video (+20đ)!',
+      '🥉 Nhiệm Vụ 3: Thử Lửa Phản Xạ 10s (+20đ)!',
+      '🎖️ Nhiệm Vụ 4: Két Sắt & Sao Lưu Cloud (+15đ)!'
+    ];
+    if (typeof showToast === 'function') {
+      showToast(`🎉 Hoàn thành ${titles[questNum]}`, '🏆');
+    }
+
+    updateOnboardingQuestUI();
+  }
+}
+
+function resetOnboardingQuests() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(STORAGE_KEY_ONBOARDING_QUESTS);
+    localStorage.removeItem(STORAGE_KEY_ONBOARDING_MODAL_SHOWN);
+    localStorage.removeItem(STORAGE_KEY_ONBOARDING_DISMISSED);
+  }
+  updateOnboardingQuestUI();
+  const widget = document.getElementById('onboardingQuestWidget');
+  if (widget) {
+    widget.style.display = 'block';
+    widget.classList.remove('minimized');
+    const btn = document.getElementById('btnToggleQuestWidget');
+    if (btn) btn.textContent = '▼';
+  }
+  if (typeof showToast === 'function') {
+    showToast('🔄 Đã làm mới 4 Nhiệm Vụ Tân Thủ (0/4)! Sẵn sàng thử lại từ đầu.', '🎯');
+  }
+}
+
+function updateOnboardingQuestUI() {
+  if (typeof document === 'undefined') return;
+  const state = getOnboardingQuestState();
+
+  const quests = [1, 2, 3, 4];
+  let completedCount = 0;
+  let totalScore = 0;
+  const weights = [0, 20, 20, 20, 15];
+
+  quests.forEach(q => {
+    const isDone = !!state['quest' + q];
+    if (isDone) {
+      completedCount++;
+      totalScore += weights[q];
+    }
+
+    const mBadge = document.getElementById('onbBadgeQuest' + q);
+    if (mBadge) {
+      if (isDone) {
+        mBadge.textContent = '✅ Đã xong';
+        mBadge.className = 'quest-status-badge done';
+      } else {
+        mBadge.textContent = 'Chưa làm';
+        mBadge.className = 'quest-status-badge';
+      }
+    }
+
+    const itemEl = document.getElementById('questItem' + q);
+    const checkEl = document.getElementById('questCheck' + q);
+    if (itemEl) {
+      if (isDone) {
+        itemEl.classList.add('done');
+      } else {
+        itemEl.classList.remove('done');
+      }
+    }
+    if (checkEl) {
+      checkEl.textContent = isDone ? '✅' : '⬜';
+    }
+  });
+
+  const percent = Math.round((completedCount / 4) * 100);
+  const progText = document.getElementById('questWidgetProgressText');
+  if (progText) {
+    progText.textContent = `Đã xong: ${completedCount}/4 nhiệm vụ (${percent}%)`;
+  }
+
+  const fillEl = document.getElementById('questProgressFill');
+  if (fillEl) {
+    fillEl.style.width = percent + '%';
+    if (percent === 100) {
+      fillEl.style.background = 'linear-gradient(90deg, #f59e0b, #10b981)';
+    } else {
+      fillEl.style.background = 'linear-gradient(90deg, #f59e0b, #38bdf8)';
+    }
+  }
+
+  const scoreEl = document.getElementById('questWidgetTotalScore');
+  if (scoreEl) {
+    scoreEl.textContent = `+${totalScore}đ`;
+  }
+
+  const completedBanner = document.getElementById('questCompletedBanner');
+  if (completedBanner) {
+    completedBanner.style.display = (completedCount === 4) ? 'flex' : 'none';
+  }
+}
+
+function openOnboardingWelcomeModal() {
+  const modal = document.getElementById('onboardingWelcomeModal');
+  if (modal) {
+    modal.style.display = 'flex';
+    modal.classList.add('visible', 'open');
+    updateOnboardingQuestUI();
+  }
+}
+
+function closeOnboardingWelcomeModal(openWidget = false) {
+  const modal = document.getElementById('onboardingWelcomeModal');
+  if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('visible', 'open');
+  }
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_ONBOARDING_MODAL_SHOWN, '1');
+  }
+  if (openWidget) {
+    const widget = document.getElementById('onboardingQuestWidget');
+    if (widget) {
+      widget.style.display = 'block';
+      widget.classList.remove('minimized');
+    }
+  }
+}
+
+function dismissOnboardingWelcomeModal() {
+  closeOnboardingWelcomeModal(false);
+  if (typeof showToast === 'function') {
+    showToast('🎯 Bạn có thể mở lại Hướng Dẫn Nhập Môn bất kỳ lúc nào tại icon 🎯 trên thanh tiêu đề!', 'ℹ️');
+  }
+}
+
+function startOnboardingQuest(questNum) {
+  closeOnboardingWelcomeModal(true);
+  navigateOnboardingQuest(questNum);
+}
+
+function navigateOnboardingQuest(questNum) {
+  if (questNum === 1) {
+    switchSubsystem('profile');
+    setTimeout(() => {
+      const input = document.getElementById('profileFullName');
+      if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+    if (typeof showToast === 'function') {
+      showToast('📸 Bước 1: Nhập Họ tên, SĐT & Tải ảnh đại diện để đóng dấu thương hiệu!', '👤');
+    }
+  } else if (questNum === 2) {
+    switchSubsystem('video');
+    setTimeout(() => {
+      const rawEl = document.getElementById('rawInfoInput');
+      if (rawEl && !rawEl.value.trim()) {
+        if (typeof fillSampleManualData === 'function') fillSampleManualData();
+      }
+      const btn = document.getElementById('btnAnalyzeGenerate');
+      if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    if (typeof showToast === 'function') {
+      showToast('🎬 Bước 2: Bấm nút "Phân Tích & Viết Kịch Bản" để tạo kịch bản video AI chính chủ!', '✨');
+    }
+  } else if (questNum === 3) {
+    switchSubsystem('library');
+    setTimeout(() => {
+      if (typeof switchLibraryTab === 'function') switchLibraryTab('reflex');
+      if (typeof switchReflexMode === 'function') switchReflexMode('quiz');
+      const arena = document.getElementById('reflexArenaWrap');
+      if (arena) arena.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    if (typeof showToast === 'function') {
+      showToast('🥊 Bước 3: Đấu tập 1 tình huống phản xạ xử lý từ chối của Sếp Vinh (xáo trộn ngẫu nhiên)!', '⚡');
+    }
+  } else if (questNum === 4) {
+    openCloudBackupModal();
+    if (typeof showToast === 'function') {
+      showToast('☁️ Bước 4: Kiểm tra thước đo bộ nhớ & an tâm dữ liệu!', '💾');
+    }
+  }
+}
+
+function toggleOnboardingWidgetCollapse() {
+  const widget = document.getElementById('onboardingQuestWidget');
+  if (!widget) return;
+  widget.classList.toggle('minimized');
+  const btn = document.getElementById('btnToggleQuestWidget');
+  const isMin = widget.classList.contains('minimized');
+  if (btn) btn.textContent = isMin ? '▲' : '▼';
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_ONBOARDING_MINIMIZED, isMin ? '1' : '0');
+  }
+}
+
+function closeOnboardingWidgetPermanent() {
+  const widget = document.getElementById('onboardingQuestWidget');
+  if (widget) widget.style.display = 'none';
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY_ONBOARDING_DISMISSED, '1');
+  }
+  if (typeof showToast === 'function') {
+    showToast('🎯 Đã ẩn bảng nhiệm vụ. Mở lại bất kỳ lúc nào tại icon 🎯 trên thanh tiêu đề!', 'ℹ️');
+  }
+}
+
+function initOnboardingSystem() {
+  if (typeof document === 'undefined') return;
+
+  if (typeof localStorage !== 'undefined') {
+    const isMin = localStorage.getItem(STORAGE_KEY_ONBOARDING_MINIMIZED) === '1';
+    const widget = document.getElementById('onboardingQuestWidget');
+    if (widget && isMin) {
+      widget.classList.add('minimized');
+      const btn = document.getElementById('btnToggleQuestWidget');
+      if (btn) btn.textContent = '▲';
+    }
+  }
+
+  updateOnboardingQuestUI();
+
+  if (typeof localStorage !== 'undefined') {
+    const dismissed = localStorage.getItem(STORAGE_KEY_ONBOARDING_DISMISSED) === '1';
+    const modalShown = localStorage.getItem(STORAGE_KEY_ONBOARDING_MODAL_SHOWN);
+    const widget = document.getElementById('onboardingQuestWidget');
+
+    // Widget luôn hiển thị nổi góc phải để người dùng theo dõi tiến độ trừ khi họ bấm ✕
+    if (widget && !dismissed) {
+      widget.style.display = 'block';
+    }
+
+    // Modal chào đón tự động mở sau 600ms nếu chưa từng đóng/mở
+    if (!modalShown) {
+      setTimeout(() => {
+        openOnboardingWelcomeModal();
+      }, 600);
+    }
+  }
+}
+
 function openHuongDanModal() {
-  const modal = document.getElementById('huongDanModal');
-  if (modal) modal.style.display = 'flex';
+  openOnboardingWelcomeModal();
 }
 function closeHuongDanModal() {
-  const modal = document.getElementById('huongDanModal');
-  if (modal) modal.style.display = 'none';
+  closeOnboardingWelcomeModal(false);
 }
 
 function openBookFromDashboard(bookKey) {
@@ -23694,6 +24815,10 @@ function updateCloudBackupStats() {
   if (remindersEl) remindersEl.textContent = reminders.length;
   if (khaosatEl) khaosatEl.textContent = khaosatCount;
   if (checklistsEl) checklistsEl.textContent = totalPosts;
+
+  if (typeof updateStorageQuotaDisplay === 'function') {
+    updateStorageQuotaDisplay();
+  }
 }
 
 function openCloudBackupModal() {
@@ -23702,11 +24827,278 @@ function openCloudBackupModal() {
     updateCloudBackupStats();
     modal.style.display = 'flex';
   }
+  if (typeof markOnboardingQuestDone === 'function') {
+    markOnboardingQuestDone(4);
+  }
 }
 
 function closeCloudBackupModal() {
   const modal = document.getElementById('cloudBackupModal');
   if (modal) modal.style.display = 'none';
+}
+
+// ==========================================
+// 15.10. BỘ GIÁM SÁT DUNG LƯỢNG LOCALSTORAGE & CẢNH BÁO AN TOÀN DỮ LIỆU
+// ==========================================
+const STORAGE_ESTIMATED_MAX_BYTES = 5 * 1024 * 1024; // 5 MB định mức an toàn browser
+
+function getLocalStorageUsage() {
+  if (typeof localStorage === 'undefined') {
+    return {
+      usedBytes: 0,
+      usedKB: 0,
+      usedMB: '0.00',
+      freeBytes: STORAGE_ESTIMATED_MAX_BYTES,
+      freeKB: Math.round(STORAGE_ESTIMATED_MAX_BYTES / 1024),
+      freeMB: '5.00',
+      totalBytes: STORAGE_ESTIMATED_MAX_BYTES,
+      totalMB: '5.00',
+      percent: 0,
+      status: 'safe',
+      breakdown: { properties: 0, profile: 0, khaosat: 0, crm: 0, other: 0 }
+    };
+  }
+
+  let totalBytes = 0;
+  const breakdown = {
+    properties: 0,
+    profile: 0,
+    khaosat: 0,
+    crm: 0,
+    other: 0
+  };
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      const val = localStorage.getItem(key) || '';
+      // Ký tự UTF-16 tốn ~2 bytes
+      const itemBytes = (key.length + val.length) * 2;
+      totalBytes += itemBytes;
+
+      if (key.includes('saved_properties')) {
+        breakdown.properties += itemBytes;
+      } else if (key.includes('user_profile')) {
+        breakdown.profile += itemBytes;
+      } else if (key.includes('khaosat')) {
+        breakdown.khaosat += itemBytes;
+      } else if (key.includes('crm') || key.includes('reminders') || key.includes('client')) {
+        breakdown.crm += itemBytes;
+      } else {
+        breakdown.other += itemBytes;
+      }
+    }
+  } catch (e) {
+    console.warn('Lỗi khi tính dung lượng localStorage:', e);
+  }
+
+  const freeBytes = Math.max(0, STORAGE_ESTIMATED_MAX_BYTES - totalBytes);
+  const percent = Math.min(100, Math.round((totalBytes / STORAGE_ESTIMATED_MAX_BYTES) * 1000) / 10);
+
+  let status = 'safe';
+  if (percent >= 85) {
+    status = 'critical';
+  } else if (percent >= 70) {
+    status = 'warning';
+  }
+
+  return {
+    usedBytes: totalBytes,
+    usedKB: Math.round(totalBytes / 1024),
+    usedMB: (totalBytes / (1024 * 1024)).toFixed(2),
+    freeBytes,
+    freeKB: Math.round(freeBytes / 1024),
+    freeMB: (freeBytes / (1024 * 1024)).toFixed(2),
+    totalBytes: STORAGE_ESTIMATED_MAX_BYTES,
+    totalMB: '5.00',
+    percent,
+    status,
+    breakdown
+  };
+}
+
+function updateStorageQuotaDisplay() {
+  if (typeof document === 'undefined') return;
+  const usage = getLocalStorageUsage();
+
+  // 1. Cập nhật Pill trên Topbar
+  const topbarVal = document.getElementById('v7StorageVal');
+  const topbarPill = document.getElementById('v7StoragePill');
+  if (topbarVal) topbarVal.textContent = `${usage.percent}%`;
+  if (topbarPill) {
+    topbarPill.className = `v7-storage-pill status-${usage.status}`;
+    topbarPill.title = `Bộ nhớ đã dùng ${usage.usedMB} MB / 5.00 MB (${usage.percent}%). Click để xem & sao lưu.`;
+  }
+
+  // 2. Cập nhật Modal Sao Lưu Cloud
+  const usedDetail = document.getElementById('storageUsedDetailText');
+  const percentText = document.getElementById('storagePercentText');
+  const freeDetail = document.getElementById('storageFreeDetailText');
+  const meterBar = document.getElementById('storageMeterBar');
+  const statusBadge = document.getElementById('storageStatusBadge');
+  const warningNote = document.getElementById('storageWarningNote');
+
+  if (usedDetail) usedDetail.textContent = `${usage.usedMB} MB / 5.00 MB`;
+  if (percentText) percentText.textContent = `${usage.percent}%`;
+  if (freeDetail) freeDetail.textContent = `${usage.freeMB} MB`;
+
+  if (meterBar) {
+    meterBar.style.width = `${Math.min(100, usage.percent)}%`;
+    meterBar.className = `storage-meter-fill ${usage.status === 'critical' ? 'critical' : (usage.status === 'warning' ? 'warning' : '')}`;
+  }
+
+  if (statusBadge) {
+    statusBadge.className = `v7-storage-pill status-${usage.status}`;
+    if (usage.status === 'critical') statusBadge.innerHTML = '🔴 Báo động đầy';
+    else if (usage.status === 'warning') statusBadge.innerHTML = '🟡 Cảnh báo &ge;70%';
+    else statusBadge.innerHTML = '🟢 An toàn';
+  }
+
+  if (warningNote) {
+    warningNote.style.display = (usage.status === 'safe') ? 'none' : 'block';
+    if (usage.status === 'critical') {
+      warningNote.innerHTML = `🚨 <strong>Báo động: Dung lượng đã đạt ${usage.percent}%!</strong> Vui lòng bấm <em>"Tải File Sao Lưu Về Máy"</em> ngay lập tức để tránh mất dữ liệu khi trình duyệt từ chối lưu thêm.`;
+    } else {
+      warningNote.innerHTML = `⚠️ <strong>Dung lượng đã đạt ${usage.percent}%:</strong> Bạn nên tải file sao lưu dự phòng lên Google Drive để an tâm làm việc.`;
+    }
+  }
+
+  // Breakdown KB
+  const bProps = document.getElementById('storageSizeProps');
+  const bProfile = document.getElementById('storageSizeProfile');
+  const bKhaosat = document.getElementById('storageSizeKhaosat');
+  const bCrm = document.getElementById('storageSizeCrm');
+  const bOther = document.getElementById('storageSizeOther');
+
+  if (bProps) bProps.textContent = `${Math.round(usage.breakdown.properties / 1024)} KB`;
+  if (bProfile) bProfile.textContent = `${Math.round((usage.breakdown.profile || 0) / 1024)} KB`;
+  if (bKhaosat) bKhaosat.textContent = `${Math.round(usage.breakdown.khaosat / 1024)} KB`;
+  if (bCrm) bCrm.textContent = `${Math.round(usage.breakdown.crm / 1024)} KB`;
+  if (bOther) bOther.textContent = `${Math.round(usage.breakdown.other / 1024)} KB`;
+
+  // 3. Cập nhật Banner cảnh báo Kho Nhà
+  const savedPropsAlert = document.getElementById('savedPropsStorageWarning');
+  const savedPropsAlertSub = document.getElementById('savedPropsStorageAlertSub');
+  if (savedPropsAlert) {
+    if (usage.status !== 'safe') {
+      savedPropsAlert.style.display = 'flex';
+      savedPropsAlert.className = `storage-alert-banner ${usage.status}`;
+      if (savedPropsAlertSub) {
+        savedPropsAlertSub.textContent = `Đã sử dụng ${usage.percent}% (${usage.usedMB} MB). Bạn nên xuất sao lưu JSON lên Google Drive.`;
+      }
+    } else {
+      savedPropsAlert.style.display = 'none';
+    }
+  }
+
+  // 4. Cập nhật Banner cảnh báo Global Topbar
+  const globalAlert = document.getElementById('v7StorageQuotaAlertBanner');
+  const globalAlertSub = document.getElementById('v7StorageAlertSub');
+  if (globalAlert) {
+    let isDismissed = false;
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        isDismissed = Boolean(sessionStorage.getItem('storage_banner_dismissed'));
+      }
+    } catch (e) {}
+
+    if (usage.percent >= 75 && !isDismissed) {
+      globalAlert.style.display = 'flex';
+      globalAlert.className = `storage-alert-banner ${usage.status}`;
+      if (globalAlertSub) {
+        globalAlertSub.textContent = `Đã sử dụng ${usage.percent}% (${usage.usedMB} MB / 5.00 MB). Hãy tải file sao lưu dự phòng lên Google Drive để bảo vệ dữ liệu.`;
+      }
+    } else {
+      globalAlert.style.display = 'none';
+    }
+  }
+}
+
+function checkLocalStorageQuotaWarning(silent = true) {
+  const usage = getLocalStorageUsage();
+  updateStorageQuotaDisplay();
+  if (!silent && usage.status !== 'safe') {
+    if (typeof showToast === 'function') {
+      showToast(`Bộ nhớ trình duyệt: ${usage.percent}% (${usage.usedMB} MB / 5 MB)`, usage.status === 'critical' ? '🚨' : '⚠️');
+    }
+  }
+  return usage;
+}
+
+function dismissStorageQuotaBanner() {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('storage_banner_dismissed', '1');
+    }
+  } catch (e) {}
+  const banner = document.getElementById('v7StorageQuotaAlertBanner');
+  if (banner) banner.style.display = 'none';
+}
+
+function cleanSafeStorageGarbage() {
+  if (typeof localStorage === 'undefined') return;
+  let bytesFreed = 0;
+
+  try {
+    // 1. Dọn dẹp các key tạm thời
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith('temp_') || k.startsWith('cache_') || k.includes('survey_temp')) {
+        keysToRemove.push(k);
+      }
+    }
+    keysToRemove.forEach(k => {
+      const val = localStorage.getItem(k) || '';
+      bytesFreed += (k.length + val.length) * 2;
+      localStorage.removeItem(k);
+    });
+
+    // 2. Nén tối ưu hóa lại Avatar nếu avatar đang nặng > 35KB
+    const p = getUserProfile();
+    if (p && p.avatar && typeof p.avatar === 'string' && p.avatar.length > 35000) {
+      const oldLen = p.avatar.length;
+      compressImageToDataUrl(p.avatar, 180, 180, 0.78, (compressed) => {
+        if (compressed && compressed.length < p.avatar.length) {
+          p.avatar = compressed;
+          saveUserProfile(p);
+          if (typeof renderAvatarInDOM === 'function') renderAvatarInDOM(compressed);
+          if (typeof updateStorageQuotaDisplay === 'function') updateStorageQuotaDisplay();
+          const freedKB = Math.round(((oldLen - compressed.length) * 2) / 1024);
+          if (typeof showToast === 'function') {
+            showToast(`✨ Đã nén ảnh avatar & giải phóng ${freedKB} KB!`, '🚀');
+          }
+        }
+      });
+    }
+
+    // 3. Tối ưu hóa kho nhà: làm sạch các chuỗi base64 ảnh rác
+    const props = getSavedProperties();
+    let propCleaned = false;
+    props.forEach(item => {
+      if (item.rawText && item.rawText.includes('data:image/')) {
+        const oldLen = item.rawText.length;
+        item.rawText = sanitizePropertyText(item.rawText);
+        if (item.rawText.length < oldLen) {
+          propCleaned = true;
+          bytesFreed += (oldLen - item.rawText.length) * 2;
+        }
+      }
+    });
+    if (propCleaned) {
+      savePropertiesList(props);
+    }
+  } catch (e) {
+    console.warn('Lỗi khi dọn rác bộ nhớ:', e);
+  }
+
+  updateStorageQuotaDisplay();
+  const freedKB = Math.round(bytesFreed / 1024);
+  if (typeof showToast === 'function') {
+    showToast(`🧹 Đã tối ưu hóa bộ nhớ an toàn! (Giải phóng ~${freedKB} KB)`, '✨');
+  }
 }
 
 function openGoogleDriveWeb() {
@@ -23802,6 +25194,9 @@ function exportFullSystemBackup() {
 
   if (typeof showToast === 'function') {
     showToast('☁️ Đã tải file sao lưu! Hãy kéo thả vào Google Drive của bạn để lưu vĩnh viễn.', '✅');
+  }
+  if (typeof markOnboardingQuestDone === 'function') {
+    markOnboardingQuestDone(4);
   }
   return payload;
 }
@@ -23935,6 +25330,8 @@ if (typeof window !== 'undefined') {
   window.HCMC_MERGER_DATA = HCMC_MERGER_DATA;
   window.STORAGE_KEY_PROPERTIES = STORAGE_KEY_PROPERTIES;
   window.STORAGE_KEY_ACTIVE_ID = STORAGE_KEY_ACTIVE_ID;
+  window.showToast = showToast;
+  window.hideToast = hideToast;
   window.parseRawInfo = parseRawInfo;
   window.extractPropertyData = extractPropertyData;
   window.validatePropertyData = validatePropertyData;
@@ -24405,6 +25802,14 @@ window.openRecruitSection = openRecruitSection;
   window.answerReflexQuiz = answerReflexQuiz;
   window.resetReflexTrainingState = resetReflexTrainingState;
   window.initReflexTraining = initReflexTraining;
+  window.toggleReflexShuffle = toggleReflexShuffle;
+  window.reshuffleReflexQuiz = reshuffleReflexQuiz;
+  window.initReflexShuffleState = initReflexShuffleState;
+  window.getReflexCardOrder = getReflexCardOrder;
+  window.getReflexActiveCard = getReflexActiveCard;
+  window.getReflexCardOptions = getReflexCardOptions;
+  window.isReflexOptionSelected = isReflexOptionSelected;
+  window.shuffleArray = shuffleArray;
   window.switchMatrixMode = switchMatrixMode;
   window.getActiveMatrixMode = getActiveMatrixMode;
   window.get6HousesMatrix = get6HousesMatrix;
@@ -24432,7 +25837,39 @@ window.openRecruitSection = openRecruitSection;
   window.initZaloScriptsModule = initZaloScriptsModule;
   window.filterZaloScripts = filterZaloScripts;
   window.renderZaloScripts = renderZaloScripts;
-  window.copyZaloScript = copyZaloScript;
+  // 9 Phân Khúc Giá & Storage Quota Monitor exports
+  window.REAL_ESTATE_PRICE_SEGMENTS = REAL_ESTATE_PRICE_SEGMENTS;
+  window.getPropertyPriceValue = getPropertyPriceValue;
+  window.matchPriceSegment = matchPriceSegment;
+  window.getPriceSegmentLabel = getPriceSegmentLabel;
+  window.selectSavedPropPriceSegment = selectSavedPropPriceSegment;
+  window.applyManualPriceQuick = applyManualPriceQuick;
+  window.getLocalStorageUsage = getLocalStorageUsage;
+  window.updateStorageQuotaDisplay = updateStorageQuotaDisplay;
+  window.checkLocalStorageQuotaWarning = checkLocalStorageQuotaWarning;
+  window.dismissStorageQuotaBanner = dismissStorageQuotaBanner;
+  window.cleanSafeStorageGarbage = cleanSafeStorageGarbage;
+  window.compressImageToDataUrl = compressImageToDataUrl;
+  window.optimizeStoredProfileAvatar = optimizeStoredProfileAvatar;
+  window.sanitizePropertyText = sanitizePropertyText;
+  // Onboarding Nhập Môn & Nhiệm Vụ Tân Thủ
+  window.STORAGE_KEY_ONBOARDING_QUESTS = STORAGE_KEY_ONBOARDING_QUESTS;
+  window.STORAGE_KEY_ONBOARDING_MODAL_SHOWN = STORAGE_KEY_ONBOARDING_MODAL_SHOWN;
+  window.STORAGE_KEY_ONBOARDING_MINIMIZED = STORAGE_KEY_ONBOARDING_MINIMIZED;
+  window.STORAGE_KEY_ONBOARDING_DISMISSED = STORAGE_KEY_ONBOARDING_DISMISSED;
+  window.getOnboardingQuestState = getOnboardingQuestState;
+  window.saveOnboardingQuestState = saveOnboardingQuestState;
+  window.markOnboardingQuestDone = markOnboardingQuestDone;
+  window.updateOnboardingQuestUI = updateOnboardingQuestUI;
+  window.openOnboardingWelcomeModal = openOnboardingWelcomeModal;
+  window.closeOnboardingWelcomeModal = closeOnboardingWelcomeModal;
+  window.dismissOnboardingWelcomeModal = dismissOnboardingWelcomeModal;
+  window.startOnboardingQuest = startOnboardingQuest;
+  window.navigateOnboardingQuest = navigateOnboardingQuest;
+  window.toggleOnboardingWidgetCollapse = toggleOnboardingWidgetCollapse;
+  window.closeOnboardingWidgetPermanent = closeOnboardingWidgetPermanent;
+  window.resetOnboardingQuests = resetOnboardingQuests;
+  window.initOnboardingSystem = initOnboardingSystem;
 
   window.AppState = AppState;
 }
@@ -24649,6 +26086,8 @@ if (typeof module !== 'undefined' && module.exports) {
     HCMC_MERGER_DATA,
     STORAGE_KEY_PROPERTIES,
     STORAGE_KEY_ACTIVE_ID,
+    showToast,
+    hideToast,
     parseRealEstatePrice,
     parseRealEstateOrientation,
     parseRawInfo,
@@ -24671,6 +26110,7 @@ if (typeof module !== 'undefined' && module.exports) {
     changeVideoStyle,
     changeSellingAngle,
     regenerateHook,
+    applyCustomHook,
     changeDuration,
     copyResult,
     copyBlockContent,
@@ -24901,6 +26341,14 @@ openRecruitSection,
     resetReflexTrainingState,
     initReflexTraining,
     renderReflexArena,
+    toggleReflexShuffle,
+    reshuffleReflexQuiz,
+    initReflexShuffleState,
+    getReflexCardOrder,
+    getReflexActiveCard,
+    getReflexCardOptions,
+    isReflexOptionSelected,
+    shuffleArray,
     switchMatrixMode,
     getActiveMatrixMode,
     get6HousesMatrix,
@@ -25151,6 +26599,50 @@ openRecruitSection,
     openPwaInstallGuideModal,
     closePwaInstallGuideModal,
     switchPwaGuideTab,
-    triggerDirectPwaInstall
+    triggerDirectPwaInstall,
+    // 9 Phân Khúc Giá & Storage Quota Monitor exports
+    REAL_ESTATE_PRICE_SEGMENTS,
+    getPropertyPriceValue,
+    matchPriceSegment,
+    getPriceSegmentLabel,
+    selectSavedPropPriceSegment,
+    applyManualPriceQuick,
+    getLocalStorageUsage,
+    updateStorageQuotaDisplay,
+    checkLocalStorageQuotaWarning,
+    dismissStorageQuotaBanner,
+    cleanSafeStorageGarbage,
+    compressImageToDataUrl,
+    optimizeStoredProfileAvatar,
+    sanitizePropertyText,
+    // Onboarding Nhập Môn & Nhiệm Vụ Tân Thủ exports
+    STORAGE_KEY_ONBOARDING_QUESTS,
+    STORAGE_KEY_ONBOARDING_MODAL_SHOWN,
+    STORAGE_KEY_ONBOARDING_MINIMIZED,
+    STORAGE_KEY_ONBOARDING_DISMISSED,
+    getOnboardingQuestState,
+    saveOnboardingQuestState,
+    markOnboardingQuestDone,
+    updateOnboardingQuestUI,
+    openOnboardingWelcomeModal,
+    closeOnboardingWelcomeModal,
+    dismissOnboardingWelcomeModal,
+    startOnboardingQuest,
+    navigateOnboardingQuest,
+    toggleOnboardingWidgetCollapse,
+    closeOnboardingWidgetPermanent,
+    resetOnboardingQuests,
+    initOnboardingSystem,
+    // 3-Tier Undo (Hoàn Tác) System exports
+    scriptUndoStack,
+    scriptRedoStack,
+    SCRIPT_UNDO_STACK_MAX,
+    resetScriptUndoStack,
+    captureCurrentScriptSnapshot,
+    pushScriptSnapshot,
+    undoScriptState,
+    redoScriptState,
+    applyScriptSnapshot,
+    updateUndoRedoButtonsUI
   };
 }
